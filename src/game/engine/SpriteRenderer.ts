@@ -404,11 +404,18 @@ export class SpriteRenderer {
     team: Team,
     creepType: 'melee' | 'ranged' | 'siege',
     direction: Direction,
-    scale: number = 1
+    scale: number = 1,
+    neutralType?: string
   ): void {
-    const colors = team === 'radiant'
-      ? { primary: COLORS.radiantPrimary, secondary: COLORS.radiantSecondary }
-      : { primary: COLORS.direPrimary, secondary: COLORS.direSecondary };
+    // Neutral creeps get special colors
+    let colors: { primary: string; secondary: string };
+    if (team === 'neutral') {
+      colors = { primary: COLORS.neutralPrimary, secondary: COLORS.neutralSecondary };
+    } else if (team === 'radiant') {
+      colors = { primary: COLORS.radiantPrimary, secondary: COLORS.radiantSecondary };
+    } else {
+      colors = { primary: COLORS.direPrimary, secondary: COLORS.direSecondary };
+    }
     
     const frame = Math.floor(this.animationTime * 6) % 4;
     const bobOffset = Math.sin(frame * Math.PI / 2) * 1;
@@ -416,6 +423,20 @@ export class SpriteRenderer {
     const px = Math.floor(position.x);
     const py = Math.floor(position.y + bobOffset);
     const s = scale;
+    
+    // Draw shadow for all creeps
+    this.ctx.globalAlpha = 0.3;
+    this.ctx.fillStyle = COLORS.black;
+    this.ctx.beginPath();
+    this.ctx.ellipse(px, py + 3*s, 5*s, 2*s, 0, 0, Math.PI * 2);
+    this.ctx.fill();
+    this.ctx.globalAlpha = 1.0;
+    
+    // Draw neutral creeps with special appearances
+    if (team === 'neutral' && neutralType) {
+      this.drawNeutralCreep(px, py, s, neutralType, frame);
+      return;
+    }
     
     if (creepType === 'melee') {
       // Melee creep - small warrior
@@ -466,6 +487,158 @@ export class SpriteRenderer {
       this.ctx.fillStyle = '#5D4037';
       this.ctx.fillRect(px - 5*s, py + 2*s, 3*s, 3*s);
       this.ctx.fillRect(px + 2*s, py + 2*s, 3*s, 3*s);
+    }
+  }
+  
+  // Draw neutral creep based on type
+  private drawNeutralCreep(px: number, py: number, s: number, neutralType: string, frame: number): void {
+    switch (neutralType) {
+      case 'kobold':
+        // Small rat-like creature
+        this.ctx.fillStyle = '#8B4513';
+        this.ctx.fillRect(px - 3*s, py - 4*s, 6*s, 5*s);
+        this.ctx.fillStyle = '#CD853F';
+        this.ctx.fillRect(px - 2*s, py - 6*s, 4*s, 3*s);
+        // Eyes
+        this.ctx.fillStyle = '#FFFF00';
+        this.ctx.fillRect(px - 2*s, py - 5*s, 1*s, 1*s);
+        this.ctx.fillRect(px + 1*s, py - 5*s, 1*s, 1*s);
+        // Tail
+        this.ctx.fillStyle = '#CD853F';
+        this.ctx.fillRect(px + 3*s, py - 2*s, 4*s, 1*s);
+        break;
+        
+      case 'ghost':
+        // Ghostly figure
+        this.ctx.globalAlpha = 0.7 + Math.sin(this.animationTime * 4) * 0.2;
+        this.ctx.fillStyle = '#E0E0E0';
+        this.ctx.beginPath();
+        this.ctx.arc(px, py - 4*s, 5*s, 0, Math.PI * 2);
+        this.ctx.fill();
+        // Ghost trail
+        this.ctx.fillRect(px - 4*s, py, 8*s, 4*s);
+        // Eyes
+        this.ctx.fillStyle = '#000000';
+        this.ctx.fillRect(px - 2*s, py - 5*s, 2*s, 2*s);
+        this.ctx.fillRect(px + 0*s, py - 5*s, 2*s, 2*s);
+        this.ctx.globalAlpha = 1.0;
+        break;
+        
+      case 'satyr':
+        // Goat-man
+        this.ctx.fillStyle = '#8B4513';
+        this.ctx.fillRect(px - 4*s, py - 6*s, 8*s, 8*s);
+        // Horns
+        this.ctx.fillStyle = '#D2691E';
+        this.ctx.fillRect(px - 5*s, py - 10*s, 2*s, 5*s);
+        this.ctx.fillRect(px + 3*s, py - 10*s, 2*s, 5*s);
+        // Face
+        this.ctx.fillStyle = '#DEB887';
+        this.ctx.fillRect(px - 2*s, py - 5*s, 4*s, 3*s);
+        // Legs (hooves)
+        this.ctx.fillStyle = '#5D4037';
+        this.ctx.fillRect(px - 3*s, py + 2*s, 2*s, 4*s);
+        this.ctx.fillRect(px + 1*s, py + 2*s, 2*s, 4*s);
+        break;
+        
+      case 'centaur':
+        // Horse-man
+        this.ctx.fillStyle = '#8B4513';
+        this.ctx.fillRect(px - 6*s, py - 2*s, 12*s, 6*s); // Body (horse)
+        this.ctx.fillStyle = '#D2691E';
+        this.ctx.fillRect(px - 3*s, py - 8*s, 6*s, 6*s); // Torso
+        // Head
+        this.ctx.fillStyle = '#DEB887';
+        this.ctx.fillRect(px - 2*s, py - 12*s, 4*s, 4*s);
+        // Legs
+        this.ctx.fillStyle = '#5D4037';
+        this.ctx.fillRect(px - 5*s, py + 4*s, 2*s, 4*s);
+        this.ctx.fillRect(px + 3*s, py + 4*s, 2*s, 4*s);
+        break;
+        
+      case 'troll':
+        // Dark troll
+        this.ctx.fillStyle = '#2F4F4F';
+        this.ctx.fillRect(px - 5*s, py - 8*s, 10*s, 10*s);
+        // Tusks
+        this.ctx.fillStyle = '#FFFFF0';
+        this.ctx.fillRect(px - 4*s, py - 4*s, 2*s, 4*s);
+        this.ctx.fillRect(px + 2*s, py - 4*s, 2*s, 4*s);
+        // Eyes (red)
+        this.ctx.fillStyle = '#FF0000';
+        this.ctx.fillRect(px - 2*s, py - 6*s, 2*s, 2*s);
+        this.ctx.fillRect(px + 0*s, py - 6*s, 2*s, 2*s);
+        break;
+        
+      case 'golem':
+        // Rock golem
+        this.ctx.fillStyle = '#696969';
+        this.ctx.fillRect(px - 6*s, py - 8*s, 12*s, 12*s);
+        // Cracks
+        this.ctx.fillStyle = '#4A4A4A';
+        this.ctx.fillRect(px - 3*s, py - 6*s, 1*s, 8*s);
+        this.ctx.fillRect(px + 2*s, py - 4*s, 1*s, 6*s);
+        // Eyes (glowing)
+        this.ctx.fillStyle = '#FF6600';
+        this.ctx.fillRect(px - 3*s, py - 6*s, 2*s, 2*s);
+        this.ctx.fillRect(px + 1*s, py - 6*s, 2*s, 2*s);
+        break;
+        
+      case 'dragon':
+        // Black dragon
+        this.ctx.fillStyle = '#1C1C1C';
+        this.ctx.fillRect(px - 8*s, py - 6*s, 16*s, 10*s); // Body
+        // Wings
+        this.ctx.fillStyle = '#2F2F2F';
+        this.ctx.beginPath();
+        this.ctx.moveTo(px - 6*s, py - 6*s);
+        this.ctx.lineTo(px - 12*s, py - 14*s);
+        this.ctx.lineTo(px - 2*s, py - 8*s);
+        this.ctx.fill();
+        this.ctx.beginPath();
+        this.ctx.moveTo(px + 6*s, py - 6*s);
+        this.ctx.lineTo(px + 12*s, py - 14*s);
+        this.ctx.lineTo(px + 2*s, py - 8*s);
+        this.ctx.fill();
+        // Head
+        this.ctx.fillStyle = '#1C1C1C';
+        this.ctx.fillRect(px - 4*s, py - 10*s, 8*s, 4*s);
+        // Eyes (fiery)
+        this.ctx.fillStyle = '#FF4500';
+        this.ctx.fillRect(px - 2*s, py - 9*s, 2*s, 2*s);
+        this.ctx.fillRect(px + 0*s, py - 9*s, 2*s, 2*s);
+        break;
+        
+      case 'thunderhide':
+        // Large thunder beast
+        this.ctx.fillStyle = '#4B0082';
+        this.ctx.fillRect(px - 7*s, py - 6*s, 14*s, 10*s);
+        // Lightning pattern
+        this.ctx.fillStyle = '#00FFFF';
+        this.ctx.fillRect(px - 4*s, py - 4*s, 2*s, 6*s);
+        this.ctx.fillRect(px + 2*s, py - 4*s, 2*s, 6*s);
+        // Head
+        this.ctx.fillStyle = '#483D8B';
+        this.ctx.fillRect(px - 3*s, py - 10*s, 6*s, 4*s);
+        // Horns
+        this.ctx.fillStyle = '#FFD700';
+        this.ctx.fillRect(px - 4*s, py - 12*s, 2*s, 3*s);
+        this.ctx.fillRect(px + 2*s, py - 12*s, 2*s, 3*s);
+        // Electric glow
+        this.ctx.globalAlpha = 0.3 + Math.sin(this.animationTime * 6) * 0.2;
+        this.ctx.fillStyle = '#00FFFF';
+        this.ctx.beginPath();
+        this.ctx.arc(px, py - 2*s, 10*s, 0, Math.PI * 2);
+        this.ctx.fill();
+        this.ctx.globalAlpha = 1.0;
+        break;
+        
+      default:
+        // Default neutral creep
+        this.ctx.fillStyle = COLORS.neutralPrimary;
+        this.ctx.fillRect(px - 4*s, py - 5*s, 8*s, 7*s);
+        this.ctx.fillStyle = COLORS.neutralSecondary;
+        this.ctx.fillRect(px - 3*s, py - 7*s, 6*s, 2*s);
     }
   }
   
