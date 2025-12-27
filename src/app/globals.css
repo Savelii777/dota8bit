@@ -42,9 +42,9 @@ canvas {
   image-rendering: crisp-edges;
 }
 
-/* 8-bit font */
+/* 8-bit font - using system monospace as fallback, users can load Press Start 2P via CDN */
 .font-pixel {
-  font-family: 'Press Start 2P', cursive, monospace;
+  font-family: 'Press Start 2P', 'Courier New', Courier, monospace;
 }
 
 /* Animation for pulsing elements */

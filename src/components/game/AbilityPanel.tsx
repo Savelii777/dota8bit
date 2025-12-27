@@ -2,8 +2,6 @@
 
 import React from 'react';
 import { HeroEntity } from '@/types';
-import { HealthBar } from '../ui';
-import { getAbilityDefinition } from '@/game/data';
 
 interface AbilityPanelProps {
   hero: HeroEntity;
@@ -16,7 +14,6 @@ export function AbilityPanel({ hero, onAbilityClick }: AbilityPanelProps) {
   return (
     <div className="flex gap-2">
       {hero.abilities.map((ability, index) => {
-        const def = getAbilityDefinition(ability.definitionId);
         const isOnCooldown = ability.currentCooldown > 0;
         const isLocked = ability.level === 0;
         

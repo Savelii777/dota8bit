@@ -4,7 +4,6 @@ import React from 'react';
 import Link from 'next/link';
 import { PixelButton, PixelPanel } from '../ui';
 import { getAllHeroes } from '@/game/data';
-import { HeroDefinition } from '@/types';
 
 interface HeroSelectProps {
   onHeroSelect: (heroId: string) => void;

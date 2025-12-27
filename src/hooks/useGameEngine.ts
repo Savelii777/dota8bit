@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import { GameEngine } from '@/game/engine';
 import { HeroEntity, Team, GAME_CONSTANTS } from '@/types';
 import { getHeroDefinition } from '@/game/data';
@@ -9,6 +9,7 @@ import { generateId } from '@/utils';
 export function useGameEngine() {
   const engineRef = useRef<GameEngine | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [engine, setEngine] = useState<GameEngine | null>(null);
   
   const initEngine = useCallback((canvas: HTMLCanvasElement) => {
     if (engineRef.current) {
@@ -16,15 +17,17 @@ export function useGameEngine() {
     }
     
     canvasRef.current = canvas;
-    engineRef.current = new GameEngine();
-    engineRef.current.init(canvas);
+    const newEngine = new GameEngine();
+    newEngine.init(canvas);
+    engineRef.current = newEngine;
+    setEngine(newEngine);
     
-    return engineRef.current;
+    return newEngine;
   }, []);
   
   const startGame = useCallback((heroId: string, playerTeam: Team = 'radiant') => {
-    const engine = engineRef.current;
-    if (!engine) return;
+    const currentEngine = engineRef.current;
+    if (!currentEngine) return;
     
     const heroDef = getHeroDefinition(heroId);
     if (!heroDef) {
@@ -78,15 +81,15 @@ export function useGameEngine() {
       buffs: [],
     };
     
-    engine.addHero(playerHero);
-    engine.setPlayerHero(playerHero.id);
-    engine.setPlayerTeam(playerTeam);
+    currentEngine.addHero(playerHero);
+    currentEngine.setPlayerHero(playerHero.id);
+    currentEngine.setPlayerTeam(playerTeam);
     
     // Center camera on player
-    engine.camera.centerOn(playerHero.position);
+    currentEngine.camera.centerOn(playerHero.position);
     
     // Start the game loop
-    engine.start();
+    currentEngine.start();
   }, []);
   
   const stopGame = useCallback(() => {
@@ -117,7 +120,7 @@ export function useGameEngine() {
   }, []);
   
   return {
-    engine: engineRef.current,
+    engine,
     initEngine,
     startGame,
     stopGame,

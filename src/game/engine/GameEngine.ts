@@ -359,7 +359,7 @@ export class GameEngine {
     }
   }
   
-  private onProjectileHit(projectile: ProjectileEntity): void {
+  private onProjectileHit(_projectile: ProjectileEntity): void {
     // Apply damage to target
     // This would be expanded with proper damage calculation
   }
@@ -577,7 +577,7 @@ export class GameEngine {
           this.useAbility(this._playerHeroId, 3);
         }
         // Item hotkeys
-        else if (event.key >= '1' && event.key <= '6') {
+        else if (event.key && event.key >= '1' && event.key <= '6') {
           this.useItem(this._playerHeroId, parseInt(event.key) - 1);
         }
         break;

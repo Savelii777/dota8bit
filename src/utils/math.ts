@@ -1,4 +1,4 @@
-import { Vector2 } from '@/types';
+import { Vector2, Attributes, UnitStats, GAME_CONSTANTS, Direction } from '@/types';
 
 // =====================
 // VECTOR MATH
@@ -99,7 +99,6 @@ export function calculateDamage(
 // =====================
 // ATTRIBUTE CALCULATIONS
 // =====================
-import { Attributes, UnitStats, GAME_CONSTANTS } from '@/types';
 
 export function calculateDerivedStats(
   baseStats: UnitStats,
@@ -138,15 +137,12 @@ export function calculateDerivedStats(
 // =====================
 // ID GENERATION
 // =====================
-let idCounter = 0;
-
 export function generateId(prefix: string = 'entity'): string {
-  idCounter++;
-  return `${prefix}_${idCounter}_${Date.now()}`;
-}
-
-export function resetIdCounter(): void {
-  idCounter = 0;
+  // Use crypto.randomUUID for better uniqueness and thread safety
+  const uuid = typeof crypto !== 'undefined' && crypto.randomUUID 
+    ? crypto.randomUUID() 
+    : `${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
+  return `${prefix}_${uuid}`;
 }
 
 // =====================
@@ -161,7 +157,6 @@ export function formatGameTime(seconds: number): string {
 // =====================
 // DIRECTION UTILITIES
 // =====================
-import { Direction } from '@/types';
 
 export function getDirectionFromAngle(angle: number): Direction {
   // Normalize angle to 0-2π

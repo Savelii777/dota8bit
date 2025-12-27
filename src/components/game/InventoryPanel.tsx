@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { HeroEntity, ItemInstance } from '@/types';
+import { HeroEntity } from '@/types';
 import { getItemDefinition } from '@/game/data';
 
 interface InventoryPanelProps {
