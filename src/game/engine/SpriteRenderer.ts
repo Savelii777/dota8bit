@@ -3,6 +3,14 @@
 
 import { Vector2, Team, Direction, AnimationState } from '@/types';
 
+// Font constants
+const FONTS = {
+  pixel: '"Press Start 2P", monospace',
+  pixelSmall: '10px "Press Start 2P", monospace',
+  pixelMedium: '12px "Press Start 2P", monospace',
+  pixelLarge: 'bold 14px "Press Start 2P", monospace',
+};
+
 // Pixel art color palettes
 const COLORS = {
   // Radiant team colors
@@ -507,7 +515,7 @@ export class SpriteRenderer {
     
     this.ctx.globalAlpha = 1 - progress;
     this.ctx.fillStyle = COLORS.gold;
-    this.ctx.font = '12px "Press Start 2P", monospace';
+    this.ctx.font = FONTS.pixelMedium;
     this.ctx.textAlign = 'center';
     this.ctx.fillText(`+${amount}`, px, py);
     this.ctx.globalAlpha = 1.0;
@@ -522,7 +530,7 @@ export class SpriteRenderer {
     
     this.ctx.globalAlpha = 1 - progress;
     this.ctx.fillStyle = isCrit ? '#FF5722' : '#FFFFFF';
-    this.ctx.font = isCrit ? 'bold 14px "Press Start 2P", monospace' : '10px "Press Start 2P", monospace';
+    this.ctx.font = isCrit ? FONTS.pixelLarge : FONTS.pixelSmall;
     this.ctx.textAlign = 'center';
     this.ctx.fillText(`${Math.floor(damage)}`, px, py);
     this.ctx.globalAlpha = 1.0;

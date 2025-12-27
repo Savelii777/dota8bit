@@ -17,6 +17,13 @@ import {
 } from '@/types';
 import { vectorDistance, vectorNormalize, vectorSubtract, vectorMultiply, vectorAdd, getDirectionFromVector } from '@/utils';
 
+// Bot AI constants
+const BOT_AI_CONSTANTS = {
+  AGGRO_RANGE: 600,              // Range to detect and attack enemies
+  LANE_PUSH_TIME: 120,           // Time in seconds for bot to advance full lane
+  MOVEMENT_THRESHOLD: 100,       // Distance threshold before moving to new position
+};
+
 export type GameEngineEventCallback = (event: GameEngineEvent) => void;
 
 export interface GameEngineEvent {
@@ -308,7 +315,7 @@ export class GameEngine {
     
     // Update entities
     this.updateHeroes(deltaTime);
-    this.updateBotHeroes(deltaTime);
+    this.updateBotHeroes();
     this.updateCreeps(deltaTime);
     this.updateTowers(deltaTime);
     this.updateProjectiles(deltaTime);
@@ -560,7 +567,7 @@ export class GameEngine {
   }
   
   // Bot AI - simple lane pushing behavior
-  private updateBotHeroes(deltaTime: number): void {
+  private updateBotHeroes(): void {
     for (const [id, hero] of this._heroes) {
       // Skip player hero
       if (id === this._playerHeroId) continue;
@@ -572,7 +579,7 @@ export class GameEngine {
       const hasTarget = this._heroAttackTarget.get(id) !== null;
       
       // Find nearest enemy to attack
-      const nearestEnemy = this.findNearestEnemy(hero, 600);
+      const nearestEnemy = this.findNearestEnemy(hero, BOT_AI_CONSTANTS.AGGRO_RANGE);
       
       if (nearestEnemy) {
         // Attack enemy
@@ -591,17 +598,16 @@ export class GameEngine {
         
         // Calculate waypoint along mid lane
         let targetPos: Vector2;
+        const progress = Math.min(1, this._gameTime / BOT_AI_CONSTANTS.LANE_PUSH_TIME);
         
         if (hero.team === 'dire') {
           // Dire bot moves towards Radiant base (bottom-left)
-          const progress = Math.min(1, this._gameTime / 120); // Takes 2 minutes to advance
           targetPos = {
             x: mapWidth * (0.85 - progress * 0.6),
             y: mapHeight * (0.15 + progress * 0.6)
           };
         } else {
           // Radiant bot moves towards Dire base (top-right)
-          const progress = Math.min(1, this._gameTime / 120);
           targetPos = {
             x: mapWidth * (0.15 + progress * 0.6),
             y: mapHeight * (0.85 - progress * 0.6)
@@ -610,7 +616,7 @@ export class GameEngine {
         
         // Only move if far from target
         const distToTarget = vectorDistance(hero.position, targetPos);
-        if (distToTarget > 100) {
+        if (distToTarget > BOT_AI_CONSTANTS.MOVEMENT_THRESHOLD) {
           this.moveHeroTo(id, targetPos);
         }
       }
