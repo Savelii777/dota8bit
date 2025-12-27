@@ -10,6 +10,13 @@ interface AbilityPanelProps {
   onLevelUpAbility?: (index: number) => void;
 }
 
+// Helper to safely get ability value at current level (or level 1 if not yet leveled)
+function getAbilityValue(arr: number[] | undefined, level: number): number {
+  if (!arr || arr.length === 0) return 0;
+  const idx = level > 0 ? level - 1 : 0;
+  return arr[idx] ?? arr[0] ?? 0;
+}
+
 export function AbilityPanel({ hero, onAbilityClick, onLevelUpAbility }: AbilityPanelProps) {
   const abilityKeys = ['Q', 'W', 'E', 'R'];
   const [hoveredAbility, setHoveredAbility] = useState<number | null>(null);
@@ -39,7 +46,9 @@ export function AbilityPanel({ hero, onAbilityClick, onLevelUpAbility }: Ability
         const isLocked = ability.level === 0;
         const isUltimate = index === 3;
         const canLevel = canLevelUp(ability, isUltimate);
-        const hasMana = abilityDef ? hero.stats.mana >= (abilityDef.manaCost[ability.level - 1] || 0) : false;
+        const hasMana = abilityDef && ability.level > 0 
+          ? hero.stats.mana >= (abilityDef.manaCost[ability.level - 1] || 0) 
+          : true;
         
         return (
           <div
@@ -149,20 +158,20 @@ export function AbilityPanel({ hero, onAbilityClick, onLevelUpAbility }: Ability
                   <div className="flex justify-between text-xs" style={{ fontSize: '7px' }}>
                     <span className="text-blue-400">MANA:</span>
                     <span className="text-white">
-                      {ability.level > 0 ? abilityDef.manaCost[ability.level - 1] : abilityDef.manaCost[0]}
+                      {getAbilityValue(abilityDef.manaCost, ability.level)}
                     </span>
                   </div>
                   <div className="flex justify-between text-xs" style={{ fontSize: '7px' }}>
                     <span className="text-yellow-400">CD:</span>
                     <span className="text-white">
-                      {ability.level > 0 ? abilityDef.cooldown[ability.level - 1] : abilityDef.cooldown[0]}s
+                      {getAbilityValue(abilityDef.cooldown, ability.level)}s
                     </span>
                   </div>
                   {abilityDef.damage && (
                     <div className="flex justify-between text-xs" style={{ fontSize: '7px' }}>
                       <span className="text-red-400">DMG:</span>
                       <span className="text-white">
-                        {ability.level > 0 ? abilityDef.damage[ability.level - 1] : abilityDef.damage[0]}
+                        {getAbilityValue(abilityDef.damage, ability.level)}
                       </span>
                     </div>
                   )}

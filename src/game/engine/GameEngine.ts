@@ -296,7 +296,7 @@ export class GameEngine {
     return {
       id: `neutral_${campId}_${creepType}_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
       type: 'creep',
-      team: 'neutral' as Team,
+      team: 'neutral',
       definitionId: creepType,
       position: { ...position },
       rotation: 0,
