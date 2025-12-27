@@ -1,0 +1,297 @@
+import { CreepDefinition } from '@/types';
+
+export const CREEPS: Record<string, CreepDefinition> = {
+  // =====================
+  // LANE CREEPS
+  // =====================
+  melee_creep: {
+    id: 'melee_creep',
+    name: 'Melee Creep',
+    creepType: 'melee',
+    attackType: 'melee',
+    stats: {
+      maxHealth: 550,
+      health: 550,
+      maxMana: 0,
+      mana: 0,
+      healthRegen: 0.5,
+      manaRegen: 0,
+      armor: 2,
+      magicResistance: 0,
+      attackDamage: 21,
+      attackSpeed: 1.0,
+      attackRange: 32,
+      movementSpeed: 325,
+    },
+    goldReward: 40,
+    expReward: 60,
+    spriteSheet: '/assets/sprites/creeps/melee_creep.png',
+  },
+  ranged_creep: {
+    id: 'ranged_creep',
+    name: 'Ranged Creep',
+    creepType: 'ranged',
+    attackType: 'ranged',
+    stats: {
+      maxHealth: 300,
+      health: 300,
+      maxMana: 0,
+      mana: 0,
+      healthRegen: 0.5,
+      manaRegen: 0,
+      armor: 0,
+      magicResistance: 0,
+      attackDamage: 25,
+      attackSpeed: 1.0,
+      attackRange: 128,
+      movementSpeed: 325,
+    },
+    goldReward: 45,
+    expReward: 90,
+    spriteSheet: '/assets/sprites/creeps/ranged_creep.png',
+  },
+  siege_creep: {
+    id: 'siege_creep',
+    name: 'Siege Creep',
+    creepType: 'siege',
+    attackType: 'ranged',
+    stats: {
+      maxHealth: 1000,
+      health: 1000,
+      maxMana: 0,
+      mana: 0,
+      healthRegen: 0,
+      manaRegen: 0,
+      armor: 0,
+      magicResistance: 80,
+      attackDamage: 50,
+      attackSpeed: 0.5,
+      attackRange: 160,
+      movementSpeed: 300,
+    },
+    goldReward: 75,
+    expReward: 125,
+    spriteSheet: '/assets/sprites/creeps/siege_creep.png',
+  },
+
+  // =====================
+  // NEUTRAL CREEPS (EASY CAMP)
+  // =====================
+  kobold: {
+    id: 'kobold',
+    name: 'Kobold',
+    creepType: 'melee',
+    attackType: 'melee',
+    stats: {
+      maxHealth: 240,
+      health: 240,
+      maxMana: 0,
+      mana: 0,
+      healthRegen: 0.5,
+      manaRegen: 0,
+      armor: 0,
+      magicResistance: 0,
+      attackDamage: 12,
+      attackSpeed: 1.0,
+      attackRange: 32,
+      movementSpeed: 280,
+    },
+    goldReward: 20,
+    expReward: 30,
+    spriteSheet: '/assets/sprites/creeps/kobold.png',
+  },
+  ghost: {
+    id: 'ghost',
+    name: 'Ghost',
+    creepType: 'ranged',
+    attackType: 'ranged',
+    stats: {
+      maxHealth: 300,
+      health: 300,
+      maxMana: 200,
+      mana: 200,
+      healthRegen: 0.5,
+      manaRegen: 0.5,
+      armor: 0,
+      magicResistance: 30,
+      attackDamage: 18,
+      attackSpeed: 1.0,
+      attackRange: 128,
+      movementSpeed: 260,
+    },
+    goldReward: 30,
+    expReward: 45,
+    spriteSheet: '/assets/sprites/creeps/ghost.png',
+  },
+
+  // =====================
+  // NEUTRAL CREEPS (MEDIUM CAMP)
+  // =====================
+  satyr: {
+    id: 'satyr',
+    name: 'Satyr',
+    creepType: 'melee',
+    attackType: 'melee',
+    stats: {
+      maxHealth: 600,
+      health: 600,
+      maxMana: 200,
+      mana: 200,
+      healthRegen: 1.0,
+      manaRegen: 0.5,
+      armor: 3,
+      magicResistance: 0,
+      attackDamage: 32,
+      attackSpeed: 1.0,
+      attackRange: 32,
+      movementSpeed: 310,
+    },
+    goldReward: 50,
+    expReward: 80,
+    spriteSheet: '/assets/sprites/creeps/satyr.png',
+  },
+  centaur: {
+    id: 'centaur',
+    name: 'Centaur',
+    creepType: 'melee',
+    attackType: 'melee',
+    stats: {
+      maxHealth: 700,
+      health: 700,
+      maxMana: 0,
+      mana: 0,
+      healthRegen: 1.5,
+      manaRegen: 0,
+      armor: 4,
+      magicResistance: 0,
+      attackDamage: 40,
+      attackSpeed: 0.9,
+      attackRange: 32,
+      movementSpeed: 290,
+    },
+    goldReward: 60,
+    expReward: 100,
+    spriteSheet: '/assets/sprites/creeps/centaur.png',
+  },
+
+  // =====================
+  // NEUTRAL CREEPS (HARD CAMP)
+  // =====================
+  troll: {
+    id: 'troll',
+    name: 'Dark Troll',
+    creepType: 'melee',
+    attackType: 'melee',
+    stats: {
+      maxHealth: 900,
+      health: 900,
+      maxMana: 300,
+      mana: 300,
+      healthRegen: 2.0,
+      manaRegen: 1.0,
+      armor: 5,
+      magicResistance: 20,
+      attackDamage: 55,
+      attackSpeed: 1.1,
+      attackRange: 32,
+      movementSpeed: 300,
+    },
+    goldReward: 80,
+    expReward: 140,
+    spriteSheet: '/assets/sprites/creeps/troll.png',
+  },
+  golem: {
+    id: 'golem',
+    name: 'Mud Golem',
+    creepType: 'melee',
+    attackType: 'melee',
+    stats: {
+      maxHealth: 1100,
+      health: 1100,
+      maxMana: 0,
+      mana: 0,
+      healthRegen: 2.5,
+      manaRegen: 0,
+      armor: 6,
+      magicResistance: 50,
+      attackDamage: 45,
+      attackSpeed: 0.8,
+      attackRange: 32,
+      movementSpeed: 270,
+    },
+    goldReward: 90,
+    expReward: 160,
+    spriteSheet: '/assets/sprites/creeps/golem.png',
+  },
+
+  // =====================
+  // ANCIENT CREEPS
+  // =====================
+  dragon: {
+    id: 'dragon',
+    name: 'Black Dragon',
+    creepType: 'melee',
+    attackType: 'melee',
+    stats: {
+      maxHealth: 1700,
+      health: 1700,
+      maxMana: 0,
+      mana: 0,
+      healthRegen: 3.0,
+      manaRegen: 0,
+      armor: 8,
+      magicResistance: 50,
+      attackDamage: 85,
+      attackSpeed: 1.0,
+      attackRange: 32,
+      movementSpeed: 290,
+    },
+    goldReward: 130,
+    expReward: 220,
+    spriteSheet: '/assets/sprites/creeps/dragon.png',
+  },
+  thunderhide: {
+    id: 'thunderhide',
+    name: 'Thunderhide',
+    creepType: 'melee',
+    attackType: 'melee',
+    stats: {
+      maxHealth: 1500,
+      health: 1500,
+      maxMana: 400,
+      mana: 400,
+      healthRegen: 2.5,
+      manaRegen: 1.5,
+      armor: 6,
+      magicResistance: 30,
+      attackDamage: 70,
+      attackSpeed: 0.9,
+      attackRange: 32,
+      movementSpeed: 300,
+    },
+    goldReward: 120,
+    expReward: 200,
+    spriteSheet: '/assets/sprites/creeps/thunderhide.png',
+  },
+};
+
+export function getCreepDefinition(id: string): CreepDefinition | undefined {
+  return CREEPS[id];
+}
+
+export function getLaneCreeps(): CreepDefinition[] {
+  return [CREEPS.melee_creep, CREEPS.ranged_creep, CREEPS.siege_creep];
+}
+
+export function getNeutralCreeps(): CreepDefinition[] {
+  return [
+    CREEPS.kobold,
+    CREEPS.ghost,
+    CREEPS.satyr,
+    CREEPS.centaur,
+    CREEPS.troll,
+    CREEPS.golem,
+    CREEPS.dragon,
+    CREEPS.thunderhide,
+  ];
+}
