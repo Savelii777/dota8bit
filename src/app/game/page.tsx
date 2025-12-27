@@ -5,22 +5,26 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { GameHUD } from '@/components/game';
 import { GameEngine } from '@/game/engine';
 import { HeroEntity, GAME_CONSTANTS } from '@/types';
-import { getHeroDefinition } from '@/game/data';
+import { getHeroDefinition, getAllHeroes } from '@/game/data';
 import { generateId } from '@/utils';
 
-function createHero(heroId: string): HeroEntity | null {
+function createHero(heroId: string, team: 'radiant' | 'dire' = 'radiant'): HeroEntity | null {
   const heroDef = getHeroDefinition(heroId);
   if (!heroDef) return null;
+  
+  const spawnX = team === 'radiant' 
+    ? 5 * GAME_CONSTANTS.TILE_SIZE 
+    : (GAME_CONSTANTS.MAP_WIDTH - 5) * GAME_CONSTANTS.TILE_SIZE;
+  const spawnY = team === 'radiant'
+    ? (GAME_CONSTANTS.MAP_HEIGHT - 5) * GAME_CONSTANTS.TILE_SIZE
+    : 5 * GAME_CONSTANTS.TILE_SIZE;
   
   return {
     id: generateId('hero'),
     type: 'hero',
-    team: 'radiant',
+    team: team,
     definitionId: heroId,
-    position: { 
-      x: 5 * GAME_CONSTANTS.TILE_SIZE, 
-      y: (GAME_CONSTANTS.MAP_HEIGHT - 5) * GAME_CONSTANTS.TILE_SIZE 
-    },
+    position: { x: spawnX, y: spawnY },
     rotation: 0,
     isAlive: true,
     level: 1,
@@ -59,6 +63,12 @@ function createHero(heroId: string): HeroEntity | null {
   };
 }
 
+function getRandomEnemyHeroId(excludeId: string): string {
+  const heroes = getAllHeroes();
+  const available = heroes.filter(h => h.id !== excludeId);
+  return available[Math.floor(Math.random() * available.length)].id;
+}
+
 function GameContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -67,13 +77,18 @@ function GameContent() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const engineRef = useRef<GameEngine | null>(null);
   const heroRef = useRef<HeroEntity | null>(null);
+  const enemyHeroRef = useRef<HeroEntity | null>(null);
   const [heroState, setHeroState] = useState<HeroEntity | null>(null);
   const [gameTime, setGameTime] = useState(0);
   const [isNight, setIsNight] = useState(false);
   const [isEngineReady, setIsEngineReady] = useState(false);
+  const [radiantScore, setRadiantScore] = useState(0);
+  const [direScore, setDireScore] = useState(0);
   
-  // Initialize hero once
-  const initialHero = useMemo(() => createHero(heroId), [heroId]);
+  // Initialize heroes once
+  const initialHero = useMemo(() => createHero(heroId, 'radiant'), [heroId]);
+  const enemyHeroId = useMemo(() => getRandomEnemyHeroId(heroId), [heroId]);
+  const initialEnemyHero = useMemo(() => createHero(enemyHeroId, 'dire'), [enemyHeroId]);
   
   useEffect(() => {
     if (!initialHero) {
@@ -82,11 +97,15 @@ function GameContent() {
       return;
     }
     heroRef.current = initialHero;
-  }, [initialHero, heroId, router]);
+    if (initialEnemyHero) {
+      enemyHeroRef.current = initialEnemyHero;
+    }
+  }, [initialHero, initialEnemyHero, heroId, router]);
   
   useEffect(() => {
     const canvas = canvasRef.current;
     const hero = heroRef.current;
+    const enemyHero = enemyHeroRef.current;
     if (!canvas || !hero) return;
     
     // Initialize engine
@@ -94,9 +113,16 @@ function GameContent() {
     newEngine.init(canvas);
     engineRef.current = newEngine;
     
+    // Add player hero
     newEngine.addHero(hero);
     newEngine.setPlayerHero(hero.id);
     newEngine.setPlayerTeam('radiant');
+    
+    // Add enemy bot hero
+    if (enemyHero) {
+      newEngine.addHero(enemyHero);
+    }
+    
     newEngine.camera.centerOn(hero.position);
     newEngine.start();
     
@@ -113,13 +139,23 @@ function GameContent() {
       }
       setGameTime(newEngine.gameTime);
       setIsNight(newEngine.isNight);
+      
+      // Calculate scores (kills)
+      let rScore = 0;
+      let dScore = 0;
+      for (const h of newEngine.heroes.values()) {
+        if (h.team === 'radiant') rScore += h.kills;
+        else dScore += h.kills;
+      }
+      setRadiantScore(rScore);
+      setDireScore(dScore);
     }, 100);
     
     return () => {
       clearInterval(updateInterval);
       newEngine.destroy();
     };
-  }, [initialHero]);
+  }, [initialHero, initialEnemyHero]);
   
   const handleAbilityClick = useCallback((index: number) => {
     if (engineRef.current && heroState) {
@@ -164,8 +200,8 @@ function GameContent() {
         <GameHUD
           hero={displayHero}
           gameTime={gameTime}
-          radiantScore={0}
-          direScore={0}
+          radiantScore={radiantScore}
+          direScore={direScore}
           isNight={isNight}
           onAbilityClick={handleAbilityClick}
           onItemClick={handleItemClick}

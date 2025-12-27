@@ -2,6 +2,7 @@ import { Camera } from './Camera';
 import { InputHandler, InputEvent } from './InputHandler';
 import { Pathfinding } from './Pathfinding';
 import { CollisionSystem } from './CollisionSystem';
+import { SpriteRenderer } from './SpriteRenderer';
 import {
   Vector2,
   GAME_CONSTANTS,
@@ -12,8 +13,16 @@ import {
   BuildingEntity,
   ProjectileEntity,
   Team,
+  Direction,
 } from '@/types';
-import { vectorDistance, vectorNormalize, vectorSubtract, vectorMultiply, vectorAdd } from '@/utils';
+import { vectorDistance, vectorNormalize, vectorSubtract, vectorMultiply, vectorAdd, getDirectionFromVector } from '@/utils';
+
+// Bot AI constants
+const BOT_AI_CONSTANTS = {
+  AGGRO_RANGE: 600,              // Range to detect and attack enemies
+  LANE_PUSH_TIME: 120,           // Time in seconds for bot to advance full lane
+  MOVEMENT_THRESHOLD: 100,       // Distance threshold before moving to new position
+};
 
 export type GameEngineEventCallback = (event: GameEngineEvent) => void;
 
@@ -29,6 +38,7 @@ export class GameEngine {
   private _inputHandler: InputHandler;
   private _pathfinding: Pathfinding;
   private _collisionSystem: CollisionSystem;
+  private _spriteRenderer: SpriteRenderer | null = null;
   
   private _isRunning: boolean = false;
   private _isPaused: boolean = false;
@@ -44,6 +54,23 @@ export class GameEngine {
   private _buildings: Map<string, BuildingEntity> = new Map();
   private _projectiles: Map<string, ProjectileEntity> = new Map();
   
+  // Visual effects
+  private _visualEffects: Array<{
+    type: 'damage' | 'gold' | 'attack' | 'ability';
+    position: Vector2;
+    value?: number;
+    startTime: number;
+    duration: number;
+    color?: string;
+    radius?: number;
+    isCrit?: boolean;
+    attackType?: 'melee' | 'ranged';
+  }> = [];
+  
+  // Map features for rendering
+  private _trees: Array<{ position: Vector2; variant: number }> = [];
+  private _mapGenerated: boolean = false;
+  
   // Player
   private _playerHeroId: string | null = null;
   private _playerTeam: Team = 'radiant';
@@ -51,6 +78,7 @@ export class GameEngine {
   // Movement
   private _heroMovePath: Map<string, Vector2[]> = new Map();
   private _heroMoveTarget: Map<string, Vector2 | null> = new Map();
+  private _heroDirection: Map<string, Direction> = new Map();
   
   // Attack system
   private _heroAttackTarget: Map<string, string | null> = new Map();
@@ -88,6 +116,9 @@ export class GameEngine {
       throw new Error('Failed to get 2D context');
     }
     
+    // Initialize sprite renderer
+    this._spriteRenderer = new SpriteRenderer(this._ctx);
+    
     // Set canvas size
     this._camera.setViewportSize(canvas.width, canvas.height);
     
@@ -97,6 +128,9 @@ export class GameEngine {
     
     // Set pixel-perfect rendering
     this._ctx.imageSmoothingEnabled = false;
+    
+    // Generate map features
+    this.generateMapFeatures();
   }
   
   destroy(): void {
@@ -281,6 +315,7 @@ export class GameEngine {
     
     // Update entities
     this.updateHeroes(deltaTime);
+    this.updateBotHeroes();
     this.updateCreeps(deltaTime);
     this.updateTowers(deltaTime);
     this.updateProjectiles(deltaTime);
@@ -507,6 +542,10 @@ export class GameEngine {
     const distance = vectorDistance(hero.position, target);
     const moveDistance = hero.stats.movementSpeed * deltaTime;
     
+    // Update hero direction for rendering
+    const heroDirection = getDirectionFromVector(direction);
+    this._heroDirection.set(id, heroDirection);
+    
     if (distance <= moveDistance) {
       // Reached waypoint
       hero.position = { ...target };
@@ -524,6 +563,63 @@ export class GameEngine {
         vectorMultiply(normalizedDir, moveDistance)
       );
       hero.rotation = Math.atan2(normalizedDir.y, normalizedDir.x);
+    }
+  }
+  
+  // Bot AI - simple lane pushing behavior
+  private updateBotHeroes(): void {
+    for (const [id, hero] of this._heroes) {
+      // Skip player hero
+      if (id === this._playerHeroId) continue;
+      
+      if (!hero.isAlive) continue;
+      
+      // Bot AI logic
+      const hasPath = (this._heroMovePath.get(id)?.length || 0) > 0;
+      const hasTarget = this._heroAttackTarget.get(id) !== null;
+      
+      // Find nearest enemy to attack
+      const nearestEnemy = this.findNearestEnemy(hero, BOT_AI_CONSTANTS.AGGRO_RANGE);
+      
+      if (nearestEnemy) {
+        // Attack enemy
+        this._heroAttackTarget.set(id, nearestEnemy.id);
+        
+        // Move towards if not in range
+        const distance = vectorDistance(hero.position, nearestEnemy.position);
+        if (distance > hero.stats.attackRange && !hasPath) {
+          this.moveHeroTo(id, nearestEnemy.position);
+        }
+      } else if (!hasPath && !hasTarget) {
+        // No enemy nearby, push mid lane towards enemy base
+        const tileSize = GAME_CONSTANTS.TILE_SIZE;
+        const mapWidth = GAME_CONSTANTS.MAP_WIDTH * tileSize;
+        const mapHeight = GAME_CONSTANTS.MAP_HEIGHT * tileSize;
+        
+        // Calculate waypoint along mid lane
+        let targetPos: Vector2;
+        const progress = Math.min(1, this._gameTime / BOT_AI_CONSTANTS.LANE_PUSH_TIME);
+        
+        if (hero.team === 'dire') {
+          // Dire bot moves towards Radiant base (bottom-left)
+          targetPos = {
+            x: mapWidth * (0.85 - progress * 0.6),
+            y: mapHeight * (0.15 + progress * 0.6)
+          };
+        } else {
+          // Radiant bot moves towards Dire base (top-right)
+          targetPos = {
+            x: mapWidth * (0.15 + progress * 0.6),
+            y: mapHeight * (0.85 - progress * 0.6)
+          };
+        }
+        
+        // Only move if far from target
+        const distToTarget = vectorDistance(hero.position, targetPos);
+        if (distToTarget > BOT_AI_CONSTANTS.MOVEMENT_THRESHOLD) {
+          this.moveHeroTo(id, targetPos);
+        }
+      }
     }
   }
   
@@ -915,6 +1011,16 @@ export class GameEngine {
   private applyDamage(target: EntityBase, damage: number, sourceId: string): void {
     target.stats.health = Math.max(0, target.stats.health - damage);
     
+    // Add damage number visual effect
+    this.addVisualEffect({
+      type: 'damage',
+      position: { ...target.position },
+      value: damage,
+      startTime: this._gameTime,
+      duration: 1.0,
+      isCrit: damage > 100 // Consider high damage as crit for visual
+    });
+    
     if (target.stats.health <= 0) {
       this.onEntityDeath(target, sourceId);
     }
@@ -940,6 +1046,15 @@ export class GameEngine {
         const goldReward = 200 + deadHero.level * 10;
         killer.gold += goldReward;
         
+        // Add gold visual effect
+        this.addVisualEffect({
+          type: 'gold',
+          position: { ...killer.position },
+          value: goldReward,
+          startTime: this._gameTime,
+          duration: 1.5
+        });
+        
         // Experience reward
         const expReward = 100 + deadHero.level * 50;
         this.grantExperience(killer, expReward);
@@ -955,6 +1070,15 @@ export class GameEngine {
         // Grant gold and experience
         killer.gold += creepDef.goldReward;
         this.grantExperience(killer, creepDef.expReward);
+        
+        // Add gold visual effect
+        this.addVisualEffect({
+          type: 'gold',
+          position: { ...killer.position },
+          value: creepDef.goldReward,
+          startTime: this._gameTime,
+          duration: 1.2
+        });
         
         this.emit({ type: 'goldGained', data: { heroId: killer.id, amount: creepDef.goldReward } });
         this.emit({ type: 'expGained', data: { heroId: killer.id, amount: creepDef.expReward } });
@@ -1356,23 +1480,114 @@ export class GameEngine {
     hero.position = fountainPos;
   }
   
+  // Generate map features like trees
+  private generateMapFeatures(): void {
+    if (this._mapGenerated) return;
+    this._mapGenerated = true;
+    
+    const tileSize = GAME_CONSTANTS.TILE_SIZE;
+    const mapWidth = GAME_CONSTANTS.MAP_WIDTH * tileSize;
+    const mapHeight = GAME_CONSTANTS.MAP_HEIGHT * tileSize;
+    
+    // Generate trees along the edges and in jungle areas
+    // Left side trees
+    for (let i = 0; i < 40; i++) {
+      this._trees.push({
+        position: { 
+          x: 20 + Math.random() * 100, 
+          y: 100 + Math.random() * (mapHeight - 200) 
+        },
+        variant: Math.floor(Math.random() * 3)
+      });
+    }
+    
+    // Right side trees
+    for (let i = 0; i < 40; i++) {
+      this._trees.push({
+        position: { 
+          x: mapWidth - 120 + Math.random() * 100, 
+          y: 100 + Math.random() * (mapHeight - 200) 
+        },
+        variant: Math.floor(Math.random() * 3)
+      });
+    }
+    
+    // Top side trees
+    for (let i = 0; i < 40; i++) {
+      this._trees.push({
+        position: { 
+          x: 150 + Math.random() * (mapWidth - 300), 
+          y: 20 + Math.random() * 100 
+        },
+        variant: Math.floor(Math.random() * 3)
+      });
+    }
+    
+    // Bottom side trees
+    for (let i = 0; i < 40; i++) {
+      this._trees.push({
+        position: { 
+          x: 150 + Math.random() * (mapWidth - 300), 
+          y: mapHeight - 120 + Math.random() * 100 
+        },
+        variant: Math.floor(Math.random() * 3)
+      });
+    }
+    
+    // Jungle trees (Radiant side - bottom left)
+    for (let i = 0; i < 30; i++) {
+      this._trees.push({
+        position: { 
+          x: 200 + Math.random() * 400, 
+          y: mapHeight * 0.5 + Math.random() * 300 
+        },
+        variant: Math.floor(Math.random() * 3)
+      });
+    }
+    
+    // Jungle trees (Dire side - top right)
+    for (let i = 0; i < 30; i++) {
+      this._trees.push({
+        position: { 
+          x: mapWidth - 600 + Math.random() * 400, 
+          y: 200 + Math.random() * 300 
+        },
+        variant: Math.floor(Math.random() * 3)
+      });
+    }
+  }
+  
+  // Add visual effect
+  private addVisualEffect(effect: typeof this._visualEffects[0]): void {
+    this._visualEffects.push(effect);
+  }
+  
   private render(): void {
-    if (!this._ctx || !this._canvas) return;
+    if (!this._ctx || !this._canvas || !this._spriteRenderer) return;
+    
+    // Update sprite renderer animation time
+    this._spriteRenderer.update(this._deltaTime);
     
     // Clear canvas with day/night tinted background
     const bgColor = this._isNight ? '#0f0f1e' : '#1a1a2e';
     this._ctx.fillStyle = bgColor;
     this._ctx.fillRect(0, 0, this._canvas.width, this._canvas.height);
     
-    // Render map (placeholder grid)
+    // Render map
     this.renderMap();
+    
+    // Render trees
+    this.renderTrees();
     
     // Render entities
     this.renderEntities();
     
+    // Render visual effects
+    this.renderVisualEffects();
+    
     // Render night overlay
     if (this._isNight) {
-      this._ctx.fillStyle = 'rgba(0, 0, 30, 0.3)';
+      this._ctx.fillStyle = 'rgba(0, 0, 50, 0.25)';
       this._ctx.fillRect(0, 0, this._canvas.width, this._canvas.height);
     }
     
@@ -1381,7 +1596,7 @@ export class GameEngine {
   }
   
   private renderMap(): void {
-    if (!this._ctx) return;
+    if (!this._ctx || !this._spriteRenderer) return;
     
     const tileSize = GAME_CONSTANTS.TILE_SIZE;
     const startTileX = Math.floor(this._camera.position.x / tileSize);
@@ -1389,9 +1604,12 @@ export class GameEngine {
     const tilesX = Math.ceil(this._camera.viewportWidth / tileSize) + 1;
     const tilesY = Math.ceil(this._camera.viewportHeight / tileSize) + 1;
     
+    const mapWidth = GAME_CONSTANTS.MAP_WIDTH;
+    const mapHeight = GAME_CONSTANTS.MAP_HEIGHT;
+    
     for (let ty = startTileY; ty < startTileY + tilesY; ty++) {
       for (let tx = startTileX; tx < startTileX + tilesX; tx++) {
-        if (tx < 0 || ty < 0 || tx >= GAME_CONSTANTS.MAP_WIDTH || ty >= GAME_CONSTANTS.MAP_HEIGHT) {
+        if (tx < 0 || ty < 0 || tx >= mapWidth || ty >= mapHeight) {
           continue;
         }
         
@@ -1400,87 +1618,258 @@ export class GameEngine {
           y: ty * tileSize,
         });
         
-        // Alternate tile colors for grass pattern (darker at night)
-        const isLight = (tx + ty) % 2 === 0;
-        if (this._isNight) {
-          this._ctx.fillStyle = isLight ? '#1e3d1a' : '#172f14';
-        } else {
-          this._ctx.fillStyle = isLight ? '#2d5a27' : '#234d20';
+        const scaledTileSize = Math.ceil(tileSize * this._camera.zoom);
+        
+        // Determine tile type based on position
+        let tileType: 'grass' | 'road' | 'water' | 'river' = 'grass';
+        
+        // River runs diagonally
+        const normalizedX = tx / mapWidth;
+        const normalizedY = ty / mapHeight;
+        const riverLine = 1 - normalizedX;
+        const distanceToRiver = Math.abs(normalizedY - riverLine);
+        
+        if (distanceToRiver < 0.02) {
+          tileType = 'river';
         }
-        this._ctx.fillRect(
+        
+        // Roads along lanes
+        // Mid lane (diagonal)
+        if (distanceToRiver >= 0.02 && distanceToRiver < 0.05) {
+          tileType = 'road';
+        }
+        
+        // Top lane (left edge + top edge)
+        if ((tx < 10 && ty > 5) || (ty < 10 && tx > 5)) {
+          tileType = 'road';
+        }
+        
+        // Bottom lane (right edge + bottom edge)
+        if ((tx > mapWidth - 10 && ty < mapHeight - 5) || (ty > mapHeight - 10 && tx < mapWidth - 5)) {
+          tileType = 'road';
+        }
+        
+        // Apply night tint
+        if (this._isNight) {
+          this._ctx.globalAlpha = 0.85;
+        }
+        
+        this._spriteRenderer.drawTerrainTile(
           Math.floor(screenPos.x),
           Math.floor(screenPos.y),
-          tileSize * this._camera.zoom,
-          tileSize * this._camera.zoom
+          scaledTileSize,
+          tileType,
+          (tx + ty) % 8
         );
+        
+        this._ctx.globalAlpha = 1.0;
       }
     }
   }
   
+  private renderTrees(): void {
+    if (!this._ctx || !this._spriteRenderer) return;
+    
+    for (const tree of this._trees) {
+      if (!this._camera.isVisible(tree.position, 30)) continue;
+      
+      const screenPos = this._camera.worldToScreen(tree.position);
+      this._spriteRenderer.drawTree(screenPos, tree.variant, this._camera.zoom);
+    }
+  }
+  
   private renderEntities(): void {
-    if (!this._ctx) return;
+    if (!this._ctx || !this._spriteRenderer) return;
     
     // Render towers
     for (const tower of this._towers.values()) {
-      this.renderEntity(tower, '#666666', 24);
+      if (!tower.isAlive) continue;
+      const screenPos = this._camera.worldToScreen(tower.position);
+      const healthPercent = tower.stats.health / tower.stats.maxHealth;
+      this._spriteRenderer.drawTower(screenPos, tower.team, tower.tier, healthPercent, this._camera.zoom);
     }
     
     // Render buildings
     for (const building of this._buildings.values()) {
-      this.renderEntity(building, '#888888', 32);
+      if (!building.isAlive) continue;
+      const screenPos = this._camera.worldToScreen(building.position);
+      const healthPercent = building.stats.health / building.stats.maxHealth;
+      this._spriteRenderer.drawBuilding(screenPos, building.team, building.buildingType, healthPercent, this._camera.zoom);
     }
     
     // Render creeps
     for (const creep of this._creeps.values()) {
-      const color = creep.team === 'radiant' ? '#4CAF50' : '#f44336';
-      this.renderEntity(creep, color, 12);
+      if (!creep.isAlive) continue;
+      const screenPos = this._camera.worldToScreen(creep.position);
+      
+      // Determine creep type
+      let creepType: 'melee' | 'ranged' | 'siege' = 'melee';
+      if (creep.definitionId.includes('ranged')) creepType = 'ranged';
+      else if (creep.definitionId.includes('siege')) creepType = 'siege';
+      
+      // Get direction from rotation
+      const direction = this.getDirectionFromRotation(creep.rotation);
+      
+      this._spriteRenderer.drawCreep(screenPos, creep.team, creepType, direction, this._camera.zoom);
+      
+      // Draw health bar
+      this.drawHealthBar(screenPos, creep.stats.health, creep.stats.maxHealth, 16 * this._camera.zoom);
     }
     
     // Render heroes
     for (const hero of this._heroes.values()) {
       if (!hero.isAlive) continue;
-      const color = hero.team === 'radiant' ? '#00ff00' : '#ff0000';
-      this.renderEntity(hero, color, 16);
+      const screenPos = this._camera.worldToScreen(hero.position);
+      
+      // Get direction
+      const direction = this._heroDirection.get(hero.id) || 'down';
+      
+      // Check if moving or attacking
+      const isMoving = (this._heroMovePath.get(hero.id)?.length || 0) > 0;
+      const isAttacking = (this._heroAttackCooldown.get(hero.id) || 0) > 0.3;
+      const animState = isAttacking ? 'attack' : isMoving ? 'walk' : 'idle';
+      
+      this._spriteRenderer.drawHero(
+        screenPos,
+        hero.team,
+        hero.definitionId,
+        direction,
+        animState,
+        this._camera.zoom,
+        isAttacking
+      );
+      
+      // Draw health bar
+      this.drawHealthBar(screenPos, hero.stats.health, hero.stats.maxHealth, 20 * this._camera.zoom);
+      
+      // Draw mana bar
+      this.drawManaBar(screenPos, hero.stats.mana, hero.stats.maxMana, 20 * this._camera.zoom);
+      
+      // Draw hero name
+      this._ctx.fillStyle = hero.team === 'radiant' ? '#4CAF50' : '#f44336';
+      this._ctx.font = `${8 * this._camera.zoom}px "Press Start 2P", monospace`;
+      this._ctx.textAlign = 'center';
+      this._ctx.fillText(hero.definitionId.toUpperCase(), screenPos.x, screenPos.y - 28 * this._camera.zoom);
     }
     
     // Render projectiles
     for (const projectile of this._projectiles.values()) {
       const screenPos = this._camera.worldToScreen(projectile.position);
-      this._ctx.fillStyle = '#ffff00';
-      this._ctx.beginPath();
-      this._ctx.arc(screenPos.x, screenPos.y, 4 * this._camera.zoom, 0, Math.PI * 2);
-      this._ctx.fill();
+      
+      // Get projectile direction from its movement
+      const target = this._heroes.get(projectile.targetId) || 
+                     this._creeps.get(projectile.targetId) ||
+                     this._towers.get(projectile.targetId);
+      
+      let direction = { x: 1, y: 0 };
+      if (target) {
+        direction = vectorNormalize(vectorSubtract(target.position, projectile.position));
+      }
+      
+      // Determine projectile type
+      let projType: 'arrow' | 'magic' | 'tower' = 'arrow';
+      if (projectile.sprite.includes('tower')) projType = 'tower';
+      else if (projectile.damageType === 'magical') projType = 'magic';
+      
+      // Get source team
+      let sourceTeam: Team = 'radiant';
+      const sourceEntity = this._heroes.get(projectile.sourceId) || 
+                          this._creeps.get(projectile.sourceId) ||
+                          this._towers.get(projectile.sourceId);
+      if (sourceEntity) sourceTeam = sourceEntity.team;
+      
+      this._spriteRenderer.drawProjectile(screenPos, direction, projType, sourceTeam, this._camera.zoom);
     }
   }
   
-  private renderEntity(entity: EntityBase, color: string, size: number): void {
+  private drawHealthBar(position: Vector2, current: number, max: number, width: number): void {
     if (!this._ctx) return;
     
-    const screenPos = this._camera.worldToScreen(entity.position);
-    const scaledSize = size * this._camera.zoom;
-    
-    // Draw entity as colored rectangle (placeholder for sprite)
-    this._ctx.fillStyle = color;
-    this._ctx.fillRect(
-      screenPos.x - scaledSize / 2,
-      screenPos.y - scaledSize / 2,
-      scaledSize,
-      scaledSize
-    );
-    
-    // Draw health bar
-    const healthPercent = entity.stats.health / entity.stats.maxHealth;
-    const barWidth = scaledSize;
+    const healthPercent = current / max;
     const barHeight = 4 * this._camera.zoom;
-    const barY = screenPos.y - scaledSize / 2 - barHeight - 2;
+    const barY = position.y - width / 2 - barHeight - 2 * this._camera.zoom;
     
     // Background
+    this._ctx.fillStyle = '#000000';
+    this._ctx.fillRect(position.x - width / 2 - 1, barY - 1, width + 2, barHeight + 2);
+    
     this._ctx.fillStyle = '#333333';
-    this._ctx.fillRect(screenPos.x - barWidth / 2, barY, barWidth, barHeight);
+    this._ctx.fillRect(position.x - width / 2, barY, width, barHeight);
     
     // Health
-    this._ctx.fillStyle = healthPercent > 0.3 ? '#00ff00' : '#ff0000';
-    this._ctx.fillRect(screenPos.x - barWidth / 2, barY, barWidth * healthPercent, barHeight);
+    this._ctx.fillStyle = healthPercent > 0.3 ? '#4CAF50' : '#f44336';
+    this._ctx.fillRect(position.x - width / 2, barY, width * healthPercent, barHeight);
+  }
+  
+  private drawManaBar(position: Vector2, current: number, max: number, width: number): void {
+    if (!this._ctx) return;
+    
+    const manaPercent = current / max;
+    const barHeight = 3 * this._camera.zoom;
+    const barY = position.y - width / 2 - 2 * this._camera.zoom;
+    
+    // Background
+    this._ctx.fillStyle = '#1a237e';
+    this._ctx.fillRect(position.x - width / 2, barY, width, barHeight);
+    
+    // Mana
+    this._ctx.fillStyle = '#2196F3';
+    this._ctx.fillRect(position.x - width / 2, barY, width * manaPercent, barHeight);
+  }
+  
+  private getDirectionFromRotation(rotation: number): Direction {
+    // Normalize rotation to 0-2π
+    const normalized = ((rotation % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+    
+    if (normalized > 7 * Math.PI / 4 || normalized <= Math.PI / 4) {
+      return 'right';
+    } else if (normalized > Math.PI / 4 && normalized <= 3 * Math.PI / 4) {
+      return 'down';
+    } else if (normalized > 3 * Math.PI / 4 && normalized <= 5 * Math.PI / 4) {
+      return 'left';
+    } else {
+      return 'up';
+    }
+  }
+  
+  private renderVisualEffects(): void {
+    if (!this._ctx || !this._spriteRenderer) return;
+    
+    const currentTime = this._gameTime;
+    const effectsToRemove: number[] = [];
+    
+    for (let i = 0; i < this._visualEffects.length; i++) {
+      const effect = this._visualEffects[i];
+      const elapsed = currentTime - effect.startTime;
+      const progress = elapsed / effect.duration;
+      
+      if (progress >= 1) {
+        effectsToRemove.push(i);
+        continue;
+      }
+      
+      const screenPos = this._camera.worldToScreen(effect.position);
+      
+      switch (effect.type) {
+        case 'damage':
+          this._spriteRenderer.drawDamageNumber(screenPos, effect.value || 0, progress, effect.isCrit);
+          break;
+        case 'gold':
+          this._spriteRenderer.drawGoldEffect(screenPos, effect.value || 0, progress);
+          break;
+        case 'attack':
+          this._spriteRenderer.drawAttackEffect(screenPos, effect.attackType || 'melee', progress);
+          break;
+        case 'ability':
+          this._spriteRenderer.drawAbilityEffect(screenPos, effect.radius || 100, effect.color || '#FFFFFF', progress);
+          break;
+      }
+    }
+    
+    // Remove finished effects (in reverse order to maintain indices)
+    for (let i = effectsToRemove.length - 1; i >= 0; i--) {
+      this._visualEffects.splice(effectsToRemove[i], 1);
+    }
   }
   
   private renderUI(): void {
