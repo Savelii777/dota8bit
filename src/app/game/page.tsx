@@ -69,6 +69,7 @@ function GameContent() {
   const heroRef = useRef<HeroEntity | null>(null);
   const [heroState, setHeroState] = useState<HeroEntity | null>(null);
   const [gameTime, setGameTime] = useState(0);
+  const [isNight, setIsNight] = useState(false);
   const [isEngineReady, setIsEngineReady] = useState(false);
   
   // Initialize hero once
@@ -111,6 +112,7 @@ function GameContent() {
         setHeroState({ ...currentHero });
       }
       setGameTime(newEngine.gameTime);
+      setIsNight(newEngine.isNight);
     }, 100);
     
     return () => {
@@ -164,6 +166,7 @@ function GameContent() {
           gameTime={gameTime}
           radiantScore={0}
           direScore={0}
+          isNight={isNight}
           onAbilityClick={handleAbilityClick}
           onItemClick={handleItemClick}
           onShopClick={handleShopClick}

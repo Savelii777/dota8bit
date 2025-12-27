@@ -57,6 +57,8 @@ export class GameEngine {
   private _heroAttackCooldown: Map<string, number> = new Map();
   private _creepAttackTarget: Map<string, string | null> = new Map();
   private _creepAttackCooldown: Map<string, number> = new Map();
+  private _towerAttackTarget: Map<string, string | null> = new Map();
+  private _towerAttackCooldown: Map<string, number> = new Map();
   
   // Event listeners
   private _eventListeners: GameEngineEventCallback[] = [];
@@ -110,6 +112,9 @@ export class GameEngine {
   start(): void {
     if (this._isRunning) return;
     
+    // Initialize game world (spawn towers, etc.)
+    this.initializeGameWorld();
+    
     this._isRunning = true;
     this._lastTime = performance.now();
     this.gameLoop();
@@ -130,6 +135,120 @@ export class GameEngine {
   resume(): void {
     this._isPaused = false;
     this._lastTime = performance.now();
+  }
+  
+  // Initialize the game world with towers, buildings, etc.
+  private initializeGameWorld(): void {
+    // Only initialize if not already done
+    if (this._towers.size > 0) return;
+    
+    const tileSize = GAME_CONSTANTS.TILE_SIZE;
+    const mapWidth = GAME_CONSTANTS.MAP_WIDTH * tileSize;
+    const mapHeight = GAME_CONSTANTS.MAP_HEIGHT * tileSize;
+    
+    // Spawn towers for both teams on all lanes
+    const lanes: Array<'top' | 'mid' | 'bot'> = ['top', 'mid', 'bot'];
+    const tiers: Array<1 | 2 | 3> = [1, 2, 3];
+    
+    for (const lane of lanes) {
+      for (const tier of tiers) {
+        // Radiant towers
+        this.spawnTower('radiant', lane, tier, mapWidth, mapHeight, tileSize);
+        // Dire towers
+        this.spawnTower('dire', lane, tier, mapWidth, mapHeight, tileSize);
+      }
+    }
+    
+    // Spawn T4 towers (ancient protectors)
+    this.spawnTower('radiant', 'mid', 4, mapWidth, mapHeight, tileSize);
+    this.spawnTower('dire', 'mid', 4, mapWidth, mapHeight, tileSize);
+  }
+  
+  // Spawn a tower at appropriate position
+  private spawnTower(
+    team: 'radiant' | 'dire',
+    lane: 'top' | 'mid' | 'bot',
+    tier: 1 | 2 | 3 | 4,
+    mapWidth: number,
+    mapHeight: number,
+    tileSize: number
+  ): void {
+    // Calculate tower position based on team, lane, and tier
+    let x: number, y: number;
+    
+    if (team === 'radiant') {
+      // Radiant towers are on the left/bottom side
+      if (lane === 'top') {
+        const baseX = 5 * tileSize;
+        x = baseX;
+        y = mapHeight * (0.4 - tier * 0.1);
+      } else if (lane === 'mid') {
+        if (tier === 4) {
+          x = 8 * tileSize;
+          y = mapHeight - 8 * tileSize;
+        } else {
+          x = mapWidth * (0.2 + tier * 0.1);
+          y = mapHeight - mapWidth * (0.2 + tier * 0.1);
+        }
+      } else { // bot
+        const baseY = mapHeight - 5 * tileSize;
+        x = mapWidth * (0.2 + tier * 0.1);
+        y = baseY;
+      }
+    } else {
+      // Dire towers are on the right/top side
+      if (lane === 'top') {
+        const baseY = 5 * tileSize;
+        x = mapWidth * (0.8 - tier * 0.1);
+        y = baseY;
+      } else if (lane === 'mid') {
+        if (tier === 4) {
+          x = mapWidth - 8 * tileSize;
+          y = 8 * tileSize;
+        } else {
+          x = mapWidth - mapWidth * (0.2 + tier * 0.1);
+          y = mapWidth * (0.2 + tier * 0.1);
+        }
+      } else { // bot
+        const baseX = mapWidth - 5 * tileSize;
+        x = baseX;
+        y = mapHeight * (0.6 + tier * 0.1);
+      }
+    }
+    
+    // Tower stats scale with tier
+    const baseHealth = 1300 + tier * 200;
+    const baseDamage = 100 + tier * 30;
+    const baseArmor = 12 + tier * 4;
+    
+    const tower: TowerEntity = {
+      id: `tower_${team}_${lane}_t${tier}`,
+      type: 'tower',
+      team: team,
+      position: { x, y },
+      rotation: 0,
+      isAlive: true,
+      tier: tier,
+      lane: lane,
+      hasBackdoorProtection: tier > 1, // T2+ have backdoor protection
+      stats: {
+        maxHealth: baseHealth,
+        health: baseHealth,
+        maxMana: 0,
+        mana: 0,
+        healthRegen: 0,
+        manaRegen: 0,
+        armor: baseArmor,
+        magicResistance: 0,
+        attackDamage: baseDamage,
+        attackSpeed: 1.0,
+        attackRange: 700, // Tower attack range
+        movementSpeed: 0,
+      },
+      buffs: [],
+    };
+    
+    this._towers.set(tower.id, tower);
   }
   
   private gameLoop(): void {
@@ -163,6 +282,7 @@ export class GameEngine {
     // Update entities
     this.updateHeroes(deltaTime);
     this.updateCreeps(deltaTime);
+    this.updateTowers(deltaTime);
     this.updateProjectiles(deltaTime);
     
     // Update collision system
@@ -282,17 +402,10 @@ export class GameEngine {
       return;
     }
     
-    // Check if target is enemy
-    if (target.team === hero.team && target.type !== 'creep') {
-      // Can only deny creeps, not heroes (unless low health)
-      if (target.type === 'hero') {
-        const targetHero = target as HeroEntity;
-        // Can deny heroes below 25% health (simplified)
-        if (targetHero.stats.health / targetHero.stats.maxHealth > 0.25) {
-          this._heroAttackTarget.set(id, null);
-          return;
-        }
-      }
+    // Check if can attack target (enemy or valid deny target)
+    if (!this.canAttackTarget(hero, target)) {
+      this._heroAttackTarget.set(id, null);
+      return;
     }
     
     // Check range
@@ -319,6 +432,28 @@ export class GameEngine {
     this._heroAttackCooldown.set(id, attackCooldown);
   }
   
+  // Check if attacker can attack target (handles deny mechanics)
+  private canAttackTarget(attacker: EntityBase, target: EntityBase): boolean {
+    // Can always attack enemies
+    if (target.team !== attacker.team) {
+      return true;
+    }
+    
+    // Allied creeps can be denied (attacked) at any health
+    if (target.type === 'creep') {
+      return true;
+    }
+    
+    // Allied heroes can only be denied below 25% health
+    if (target.type === 'hero') {
+      const targetHero = target as HeroEntity;
+      return targetHero.stats.health / targetHero.stats.maxHealth <= 0.25;
+    }
+    
+    // Cannot attack allied buildings/towers
+    return false;
+  }
+  
   // Perform a hero attack
   private performHeroAttack(hero: HeroEntity, target: EntityBase): void {
     // Get hero definition for attack type
@@ -333,7 +468,7 @@ export class GameEngine {
     if (isRanged) {
       // Create projectile
       const projectile: ProjectileEntity = {
-        id: `proj_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        id: `proj_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`,
         type: 'projectile',
         sourceId: hero.id,
         targetId: target.id,
@@ -523,7 +658,7 @@ export class GameEngine {
     if (isRanged) {
       // Create projectile
       const projectile: ProjectileEntity = {
-        id: `proj_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        id: `proj_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`,
         type: 'projectile',
         sourceId: creep.id,
         targetId: target.id,
@@ -548,6 +683,111 @@ export class GameEngine {
     // Face towards target
     const direction = vectorSubtract(target.position, creep.position);
     creep.rotation = Math.atan2(direction.y, direction.x);
+  }
+  
+  // Update tower attacks
+  private updateTowers(deltaTime: number): void {
+    for (const [id, tower] of this._towers) {
+      if (!tower.isAlive) continue;
+      
+      // Update attack cooldown
+      const currentCooldown = this._towerAttackCooldown.get(id) || 0;
+      if (currentCooldown > 0) {
+        this._towerAttackCooldown.set(id, Math.max(0, currentCooldown - deltaTime));
+      }
+      
+      // Find target
+      const targetId = this._towerAttackTarget.get(id);
+      let target: EntityBase | undefined;
+      
+      if (targetId) {
+        target = this._creeps.get(targetId);
+        if (!target) target = this._heroes.get(targetId);
+        
+        // Clear target if dead
+        if (!target || !target.isAlive) {
+          this._towerAttackTarget.set(id, null);
+          target = undefined;
+        }
+      }
+      
+      // Tower targeting priority: 
+      // 1. Enemy heroes attacking allied heroes in range
+      // 2. Enemy creeps
+      // 3. Enemy heroes
+      if (!target) {
+        // First check for creeps (priority)
+        let nearestCreep: CreepEntity | undefined;
+        let nearestCreepDistance = tower.stats.attackRange;
+        
+        for (const creep of this._creeps.values()) {
+          if (creep.team !== tower.team && creep.isAlive) {
+            const distance = vectorDistance(tower.position, creep.position);
+            if (distance < nearestCreepDistance) {
+              nearestCreepDistance = distance;
+              nearestCreep = creep;
+            }
+          }
+        }
+        
+        if (nearestCreep) {
+          target = nearestCreep;
+          this._towerAttackTarget.set(id, nearestCreep.id);
+        } else {
+          // No creeps, check for heroes
+          let nearestHero: HeroEntity | undefined;
+          let nearestHeroDistance = tower.stats.attackRange;
+          
+          for (const hero of this._heroes.values()) {
+            if (hero.team !== tower.team && hero.isAlive) {
+              const distance = vectorDistance(tower.position, hero.position);
+              if (distance < nearestHeroDistance) {
+                nearestHeroDistance = distance;
+                nearestHero = hero;
+              }
+            }
+          }
+          
+          if (nearestHero) {
+            target = nearestHero;
+            this._towerAttackTarget.set(id, nearestHero.id);
+          }
+        }
+      }
+      
+      if (target) {
+        // Check if in attack range
+        const distance = vectorDistance(tower.position, target.position);
+        if (distance <= tower.stats.attackRange) {
+          // Attack if cooldown is ready
+          if ((this._towerAttackCooldown.get(id) || 0) <= 0) {
+            this.performTowerAttack(tower, target);
+            const attackCooldown = 1.0; // Tower attacks once per second
+            this._towerAttackCooldown.set(id, attackCooldown);
+          }
+        } else {
+          // Target out of range, clear it
+          this._towerAttackTarget.set(id, null);
+        }
+      }
+    }
+  }
+  
+  // Perform tower attack
+  private performTowerAttack(tower: TowerEntity, target: EntityBase): void {
+    // Towers always shoot projectiles
+    const projectile: ProjectileEntity = {
+      id: `proj_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`,
+      type: 'projectile',
+      sourceId: tower.id,
+      targetId: target.id,
+      position: { ...tower.position },
+      speed: 1500,
+      damage: tower.stats.attackDamage,
+      damageType: 'physical',
+      sprite: '/assets/sprites/projectiles/tower_shot.png',
+    };
+    this._projectiles.set(projectile.id, projectile);
   }
   
   private updateProjectiles(deltaTime: number): void {

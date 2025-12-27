@@ -14,6 +14,7 @@ interface GameHUDProps {
   gameTime: number;
   radiantScore: number;
   direScore: number;
+  isNight?: boolean;
   onAbilityClick?: (index: number) => void;
   onItemClick?: (index: number) => void;
   onShopClick?: () => void;
@@ -24,6 +25,7 @@ export function GameHUD({
   gameTime,
   radiantScore,
   direScore,
+  isNight = false,
   onAbilityClick,
   onItemClick,
   onShopClick,
@@ -47,10 +49,11 @@ export function GameHUD({
           <span className="text-red-400">{direScore}</span>
         </div>
         <div 
-          className="bg-gray-900 border-4 border-gray-700 px-4 py-2 text-yellow-400"
+          className="bg-gray-900 border-4 border-gray-700 px-4 py-2 text-yellow-400 flex items-center gap-2"
           style={{ fontFamily: '"Press Start 2P", cursive, monospace' }}
         >
-          {formatGameTime(gameTime)}
+          <span>{isNight ? '🌙' : '☀️'}</span>
+          <span>{formatGameTime(gameTime)}</span>
         </div>
       </div>
       
