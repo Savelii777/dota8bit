@@ -3,12 +3,19 @@
 :root {
   --background: #1a1a2e;
   --foreground: #ededed;
+  --radiant-primary: #4CAF50;
+  --radiant-secondary: #2E7D32;
+  --dire-primary: #f44336;
+  --dire-secondary: #c62828;
+  --gold: #FFD700;
+  --mana: #2196F3;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: 'Press Start 2P', 'Courier New', monospace;
+  overflow: hidden;
 }
 
 /* Pixel-perfect rendering */
@@ -42,7 +49,7 @@ canvas {
   image-rendering: crisp-edges;
 }
 
-/* 8-bit font - using system monospace as fallback, users can load Press Start 2P via CDN */
+/* 8-bit font */
 .font-pixel {
   font-family: 'Press Start 2P', 'Courier New', Courier, monospace;
 }
@@ -55,4 +62,100 @@ canvas {
 
 .animate-pixel-pulse {
   animation: pixel-pulse 1s step-start infinite;
+}
+
+/* Pixel border style */
+@keyframes pixel-glow {
+  0%, 100% { box-shadow: 0 0 5px var(--radiant-primary), 0 0 10px var(--radiant-primary); }
+  50% { box-shadow: 0 0 10px var(--radiant-primary), 0 0 20px var(--radiant-primary); }
+}
+
+.pixel-glow-radiant {
+  animation: pixel-glow 2s ease-in-out infinite;
+}
+
+@keyframes pixel-glow-dire {
+  0%, 100% { box-shadow: 0 0 5px var(--dire-primary), 0 0 10px var(--dire-primary); }
+  50% { box-shadow: 0 0 10px var(--dire-primary), 0 0 20px var(--dire-primary); }
+}
+
+.pixel-glow-dire {
+  animation: pixel-glow-dire 2s ease-in-out infinite;
+}
+
+/* Gold shimmer */
+@keyframes gold-shimmer {
+  0%, 100% { color: #FFD700; text-shadow: 0 0 5px #FFD700; }
+  50% { color: #FFA500; text-shadow: 0 0 10px #FFA500; }
+}
+
+.gold-shimmer {
+  animation: gold-shimmer 1.5s ease-in-out infinite;
+}
+
+/* Button press effect */
+.pixel-button {
+  transition: transform 0.05s ease;
+}
+
+.pixel-button:active {
+  transform: translateY(2px);
+}
+
+/* Panel shadow */
+.pixel-panel {
+  box-shadow: 
+    4px 4px 0 0 rgba(0, 0, 0, 0.5),
+    -1px -1px 0 0 rgba(255, 255, 255, 0.1) inset;
+}
+
+/* Health bar animations */
+@keyframes health-low {
+  0%, 100% { background-color: #f44336; }
+  50% { background-color: #ff6659; }
+}
+
+.health-critical {
+  animation: health-low 0.5s ease-in-out infinite;
+}
+
+/* Level up animation */
+@keyframes level-up {
+  0% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.5); opacity: 0.8; }
+  100% { transform: scale(2); opacity: 0; }
+}
+
+.level-up-effect {
+  animation: level-up 1s ease-out forwards;
+}
+
+/* Ability ready indicator */
+@keyframes ability-ready {
+  0%, 100% { border-color: #FFD700; }
+  50% { border-color: #FFA500; }
+}
+
+.ability-ready {
+  animation: ability-ready 1s ease-in-out infinite;
+}
+
+/* Tooltip fade */
+.tooltip-fade {
+  animation: fadeIn 0.15s ease-in;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Night overlay */
+@keyframes night-cycle {
+  0%, 100% { opacity: 0.2; }
+  50% { opacity: 0.3; }
+}
+
+.night-overlay {
+  animation: night-cycle 10s ease-in-out infinite;
 }

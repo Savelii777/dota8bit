@@ -94,6 +94,16 @@ export class GameEngine {
   // Timers
   private _creepWaveTimer: number = 0;
   private _goldTimer: number = 0;
+  private _neutralCampTimer: number = 0;
+  
+  // Neutral creep camps
+  private _neutralCamps: Array<{
+    id: string;
+    position: Vector2;
+    type: 'easy' | 'medium' | 'hard' | 'ancient';
+    creepIds: string[];
+    respawnTime: number;
+  }> = [];
   
   // Day/Night cycle (5 minute cycles)
   private _isNight: boolean = false;
@@ -106,6 +116,9 @@ export class GameEngine {
       GAME_CONSTANTS.MAP_WIDTH * GAME_CONSTANTS.TILE_SIZE,
       GAME_CONSTANTS.MAP_HEIGHT * GAME_CONSTANTS.TILE_SIZE
     );
+    
+    // Initialize neutral camps
+    this.initializeNeutralCamps();
   }
   
   init(canvas: HTMLCanvasElement): void {
@@ -133,6 +146,182 @@ export class GameEngine {
     this.generateMapFeatures();
   }
   
+  // Initialize neutral creep camps
+  private initializeNeutralCamps(): void {
+    const tileSize = GAME_CONSTANTS.TILE_SIZE;
+    const mapWidth = GAME_CONSTANTS.MAP_WIDTH * tileSize;
+    const mapHeight = GAME_CONSTANTS.MAP_HEIGHT * tileSize;
+    
+    // Radiant jungle camps (bottom left area)
+    this._neutralCamps = [
+      // Radiant easy camps
+      {
+        id: 'camp_radiant_easy_1',
+        position: { x: mapWidth * 0.15, y: mapHeight * 0.6 },
+        type: 'easy',
+        creepIds: [],
+        respawnTime: 0,
+      },
+      // Radiant medium camps
+      {
+        id: 'camp_radiant_medium_1',
+        position: { x: mapWidth * 0.2, y: mapHeight * 0.5 },
+        type: 'medium',
+        creepIds: [],
+        respawnTime: 0,
+      },
+      // Radiant hard camp
+      {
+        id: 'camp_radiant_hard_1',
+        position: { x: mapWidth * 0.25, y: mapHeight * 0.65 },
+        type: 'hard',
+        creepIds: [],
+        respawnTime: 0,
+      },
+      // Radiant ancient camp
+      {
+        id: 'camp_radiant_ancient',
+        position: { x: mapWidth * 0.3, y: mapHeight * 0.55 },
+        type: 'ancient',
+        creepIds: [],
+        respawnTime: 0,
+      },
+      
+      // Dire jungle camps (top right area)
+      // Dire easy camps
+      {
+        id: 'camp_dire_easy_1',
+        position: { x: mapWidth * 0.85, y: mapHeight * 0.4 },
+        type: 'easy',
+        creepIds: [],
+        respawnTime: 0,
+      },
+      // Dire medium camps
+      {
+        id: 'camp_dire_medium_1',
+        position: { x: mapWidth * 0.8, y: mapHeight * 0.5 },
+        type: 'medium',
+        creepIds: [],
+        respawnTime: 0,
+      },
+      // Dire hard camp
+      {
+        id: 'camp_dire_hard_1',
+        position: { x: mapWidth * 0.75, y: mapHeight * 0.35 },
+        type: 'hard',
+        creepIds: [],
+        respawnTime: 0,
+      },
+      // Dire ancient camp
+      {
+        id: 'camp_dire_ancient',
+        position: { x: mapWidth * 0.7, y: mapHeight * 0.45 },
+        type: 'ancient',
+        creepIds: [],
+        respawnTime: 0,
+      },
+    ];
+  }
+  
+  // Spawn neutral creeps for a camp
+  private spawnNeutralCamp(campIndex: number): void {
+    const camp = this._neutralCamps[campIndex];
+    if (!camp) return;
+    
+    // Clear any existing creeps from this camp
+    for (const creepId of camp.creepIds) {
+      this._creeps.delete(creepId);
+    }
+    camp.creepIds = [];
+    
+    // Determine creep types based on camp type
+    const creepTypes = this.getNeutralCreepTypes(camp.type);
+    
+    // Spawn creeps
+    for (let i = 0; i < creepTypes.length; i++) {
+      const creepType = creepTypes[i];
+      const offset = { x: (i - 1) * 20, y: (i % 2) * 15 };
+      
+      const creep = this.createNeutralCreep(creepType, {
+        x: camp.position.x + offset.x,
+        y: camp.position.y + offset.y,
+      }, camp.id);
+      
+      if (creep) {
+        this._creeps.set(creep.id, creep);
+        camp.creepIds.push(creep.id);
+      }
+    }
+  }
+  
+  // Get neutral creep types for a camp
+  private getNeutralCreepTypes(campType: 'easy' | 'medium' | 'hard' | 'ancient'): string[] {
+    switch (campType) {
+      case 'easy':
+        return ['kobold', 'kobold', 'ghost'];
+      case 'medium':
+        return ['satyr', 'satyr'];
+      case 'hard':
+        return ['centaur', 'troll'];
+      case 'ancient':
+        return ['dragon', 'thunderhide'];
+      default:
+        return ['kobold'];
+    }
+  }
+  
+  // Create a neutral creep entity
+  private createNeutralCreep(creepType: string, position: Vector2, campId: string): CreepEntity | null {
+    const creepStats: Record<string, {
+      maxHealth: number;
+      attackDamage: number;
+      armor: number;
+      magicResistance: number;
+      attackRange: number;
+      movementSpeed: number;
+    }> = {
+      kobold: { maxHealth: 240, attackDamage: 12, armor: 0, magicResistance: 0, attackRange: 32, movementSpeed: 280 },
+      ghost: { maxHealth: 300, attackDamage: 18, armor: 0, magicResistance: 30, attackRange: 128, movementSpeed: 260 },
+      satyr: { maxHealth: 600, attackDamage: 32, armor: 3, magicResistance: 0, attackRange: 32, movementSpeed: 310 },
+      centaur: { maxHealth: 700, attackDamage: 40, armor: 4, magicResistance: 0, attackRange: 32, movementSpeed: 290 },
+      troll: { maxHealth: 900, attackDamage: 55, armor: 5, magicResistance: 20, attackRange: 32, movementSpeed: 300 },
+      golem: { maxHealth: 1100, attackDamage: 45, armor: 6, magicResistance: 50, attackRange: 32, movementSpeed: 270 },
+      dragon: { maxHealth: 1700, attackDamage: 85, armor: 8, magicResistance: 50, attackRange: 32, movementSpeed: 290 },
+      thunderhide: { maxHealth: 1500, attackDamage: 70, armor: 6, magicResistance: 30, attackRange: 32, movementSpeed: 300 },
+    };
+    
+    const stats = creepStats[creepType];
+    if (!stats) return null;
+    
+    return {
+      id: `neutral_${campId}_${creepType}_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      type: 'creep',
+      team: 'neutral',
+      definitionId: creepType,
+      position: { ...position },
+      rotation: 0,
+      isAlive: true,
+      stats: {
+        maxHealth: stats.maxHealth,
+        health: stats.maxHealth,
+        maxMana: 0,
+        mana: 0,
+        healthRegen: 0.5,
+        manaRegen: 0,
+        armor: stats.armor,
+        magicResistance: stats.magicResistance,
+        attackDamage: stats.attackDamage,
+        attackSpeed: 1.0,
+        attackRange: stats.attackRange,
+        movementSpeed: stats.movementSpeed,
+      },
+      buffs: [],
+      lane: 'mid', // Neutrals don't use lanes but need a value
+      waypoints: [],
+      currentWaypointIndex: 0,
+    };
+  }
+
   destroy(): void {
     this.stop();
     this._inputHandler.destroy();
@@ -1299,6 +1488,13 @@ export class GameEngine {
       this.spawnCreepWave();
     }
     
+    // Neutral creep respawn timer (every 60 seconds, or on game start)
+    this._neutralCampTimer += deltaTime;
+    if (this._neutralCampTimer >= 60 || (this._gameTime < 5 && this._neutralCamps[0]?.creepIds.length === 0)) {
+      this._neutralCampTimer = 0;
+      this.updateNeutralCamps();
+    }
+    
     // Day/Night cycle (every 5 minutes = 300 seconds)
     const dayNightCycleLength = 300; // 5 minutes
     const cyclePosition = (this._gameTime % (dayNightCycleLength * 2)) / dayNightCycleLength;
@@ -1314,6 +1510,24 @@ export class GameEngine {
   // Getter for day/night status
   get isNight(): boolean {
     return this._isNight;
+  }
+  
+  // Update neutral camps (respawn if cleared)
+  private updateNeutralCamps(): void {
+    for (let i = 0; i < this._neutralCamps.length; i++) {
+      const camp = this._neutralCamps[i];
+      
+      // Check if camp is cleared (all creeps dead)
+      const aliveCreeps = camp.creepIds.filter(id => {
+        const creep = this._creeps.get(id);
+        return creep && creep.isAlive;
+      });
+      
+      // If no alive creeps, respawn the camp
+      if (aliveCreeps.length === 0) {
+        this.spawnNeutralCamp(i);
+      }
+    }
   }
   
   private spawnCreepWave(): void {
@@ -1710,7 +1924,9 @@ export class GameEngine {
       // Get direction from rotation
       const direction = this.getDirectionFromRotation(creep.rotation);
       
-      this._spriteRenderer.drawCreep(screenPos, creep.team, creepType, direction, this._camera.zoom);
+      // Pass neutral type for special rendering
+      const neutralType = creep.team === 'neutral' ? creep.definitionId : undefined;
+      this._spriteRenderer.drawCreep(screenPos, creep.team, creepType, direction, this._camera.zoom, neutralType);
       
       // Draw health bar
       this.drawHealthBar(screenPos, creep.stats.health, creep.stats.maxHealth, 16 * this._camera.zoom);
@@ -1994,13 +2210,426 @@ export class GameEngine {
   
   useAbility(heroId: string, abilityIndex: number): void {
     const hero = this._heroes.get(heroId);
-    if (!hero) return;
+    if (!hero || !hero.isAlive) return;
     
     const ability = hero.abilities[abilityIndex];
-    if (!ability || ability.currentCooldown > 0) return;
+    if (!ability || ability.level === 0 || ability.currentCooldown > 0) return;
     
-    // Ability usage would be implemented here
-    this.emit({ type: 'abilityUse', data: { heroId, abilityIndex } });
+    // Get ability definition
+    const abilityDef = this.getAbilityDefinition(ability.definitionId);
+    if (!abilityDef) return;
+    
+    // Check mana
+    const manaCost = abilityDef.manaCost[ability.level - 1] || 0;
+    if (hero.stats.mana < manaCost) return;
+    
+    // Consume mana
+    hero.stats.mana -= manaCost;
+    
+    // Set cooldown
+    ability.currentCooldown = abilityDef.cooldown[ability.level - 1] || 0;
+    
+    // Execute ability effects based on target type
+    const castRange = abilityDef.castRange[ability.level - 1] || 0;
+    const radius = abilityDef.radius ? abilityDef.radius[ability.level - 1] : 0;
+    const damage = abilityDef.damage ? abilityDef.damage[ability.level - 1] : 0;
+    const duration = abilityDef.duration ? abilityDef.duration[ability.level - 1] : 0;
+    
+    // Add visual effect at hero position
+    this.addVisualEffect({
+      type: 'ability',
+      position: { ...hero.position },
+      startTime: this._gameTime,
+      duration: 0.5,
+      color: this.getAbilityColor(abilityDef.effects),
+      radius: radius > 0 ? radius : 100,
+    });
+    
+    // Apply effects based on ability type
+    for (const effect of abilityDef.effects) {
+      if (effect.type === 'damage') {
+        const damageValue = effect.value ? effect.value[ability.level - 1] : damage;
+        const damageType = effect.damageType || 'magical';
+        
+        // Find enemies in range
+        const enemies = this.getEnemiesInRadius(hero, radius > 0 ? radius : castRange);
+        for (const enemy of enemies) {
+          const actualDamage = this.calculateDamage(
+            damageValue,
+            damageType,
+            enemy.stats.armor,
+            enemy.stats.magicResistance
+          );
+          this.applyDamage(enemy, actualDamage, hero.id);
+          
+          // Add damage effect
+          this.addVisualEffect({
+            type: 'ability',
+            position: { ...enemy.position },
+            startTime: this._gameTime,
+            duration: 0.3,
+            color: damageType === 'magical' ? '#9C27B0' : damageType === 'pure' ? '#FFD700' : '#FF5722',
+            radius: 30,
+          });
+        }
+      }
+      
+      if (effect.type === 'heal') {
+        const healValue = effect.value ? effect.value[ability.level - 1] : 0;
+        // Heal self or allies
+        hero.stats.health = Math.min(hero.stats.maxHealth, hero.stats.health + healValue);
+        
+        this.addVisualEffect({
+          type: 'ability',
+          position: { ...hero.position },
+          startTime: this._gameTime,
+          duration: 0.5,
+          color: '#4CAF50',
+          radius: 40,
+        });
+      }
+      
+      if (effect.type === 'control' && effect.controlEffect === 'stun') {
+        // Apply stun to enemies in radius
+        const enemies = this.getEnemiesInRadius(hero, radius > 0 ? radius : castRange);
+        for (const enemy of enemies) {
+          // Visual stun indicator
+          this.addVisualEffect({
+            type: 'ability',
+            position: { ...enemy.position },
+            startTime: this._gameTime,
+            duration: duration,
+            color: '#FFEB3B',
+            radius: 20,
+          });
+        }
+      }
+    }
+    
+    this.emit({ type: 'abilityUse', data: { heroId, abilityIndex, abilityName: abilityDef.name } });
+  }
+  
+  // Get enemies within radius of an entity
+  private getEnemiesInRadius(entity: EntityBase, radius: number): EntityBase[] {
+    const enemies: EntityBase[] = [];
+    
+    // Check creeps
+    for (const creep of this._creeps.values()) {
+      if (creep.team !== entity.team && creep.isAlive) {
+        if (vectorDistance(entity.position, creep.position) <= radius) {
+          enemies.push(creep);
+        }
+      }
+    }
+    
+    // Check heroes
+    for (const hero of this._heroes.values()) {
+      if (hero.team !== entity.team && hero.isAlive) {
+        if (vectorDistance(entity.position, hero.position) <= radius) {
+          enemies.push(hero);
+        }
+      }
+    }
+    
+    return enemies;
+  }
+  
+  // Get ability color based on effects
+  private getAbilityColor(effects: Array<{type: string; damageType?: string}>): string {
+    for (const effect of effects) {
+      if (effect.damageType === 'magical') return '#9C27B0';
+      if (effect.damageType === 'physical') return '#FF5722';
+      if (effect.damageType === 'pure') return '#FFD700';
+      if (effect.type === 'heal') return '#4CAF50';
+      if (effect.type === 'control') return '#FFEB3B';
+    }
+    return '#2196F3';
+  }
+  
+  // Get ability definition by ID
+  private getAbilityDefinition(id: string): {
+    name: string;
+    manaCost: number[];
+    cooldown: number[];
+    castRange: number[];
+    radius?: number[];
+    damage?: number[];
+    duration?: number[];
+    effects: Array<{
+      type: string;
+      damageType?: 'physical' | 'magical' | 'pure';
+      controlEffect?: string;
+      value?: number[];
+    }>;
+  } | undefined {
+    const abilities: Record<string, {
+      name: string;
+      manaCost: number[];
+      cooldown: number[];
+      castRange: number[];
+      radius?: number[];
+      damage?: number[];
+      duration?: number[];
+      effects: Array<{
+        type: string;
+        damageType?: 'physical' | 'magical' | 'pure';
+        controlEffect?: string;
+        value?: number[];
+      }>;
+    }> = {
+      warrior_battle_cry: {
+        name: 'Battle Cry',
+        manaCost: [80, 90, 100, 110],
+        cooldown: [20, 18, 16, 14],
+        castRange: [0, 0, 0, 0],
+        radius: [300, 350, 400, 450],
+        duration: [3, 4, 5, 6],
+        effects: [{ type: 'control', controlEffect: 'stun' }],
+      },
+      warrior_fury: {
+        name: 'Fury',
+        manaCost: [50, 60, 70, 80],
+        cooldown: [8, 8, 8, 8],
+        castRange: [128, 128, 128, 128],
+        duration: [8, 10, 12, 14],
+        effects: [{ type: 'damage', damageType: 'magical', value: [10, 20, 30, 40] }],
+      },
+      warrior_counter: {
+        name: 'Counter Strike',
+        manaCost: [0, 0, 0, 0],
+        cooldown: [0, 0, 0, 0],
+        castRange: [0, 0, 0, 0],
+        radius: [200, 200, 200, 200],
+        effects: [{ type: 'damage', damageType: 'physical', value: [50, 100, 150, 200] }],
+      },
+      warrior_execute: {
+        name: 'Execute',
+        manaCost: [150, 200, 250],
+        cooldown: [100, 80, 60],
+        castRange: [32, 32, 32],
+        effects: [{ type: 'damage', damageType: 'pure', value: [250, 350, 450] }],
+      },
+      archer_frost_arrows: {
+        name: 'Frost Arrows',
+        manaCost: [10, 10, 10, 10],
+        cooldown: [0, 0, 0, 0],
+        castRange: [192, 192, 192, 192],
+        duration: [2, 3, 4, 5],
+        effects: [{ type: 'control', controlEffect: 'slow' }],
+      },
+      archer_silence: {
+        name: 'Gust',
+        manaCost: [90, 100, 110, 120],
+        cooldown: [16, 15, 14, 13],
+        castRange: [400, 450, 500, 550],
+        radius: [200, 225, 250, 275],
+        duration: [3, 4, 5, 6],
+        effects: [{ type: 'control', controlEffect: 'silence' }],
+      },
+      archer_snipe: {
+        name: 'Snipe',
+        manaCost: [175, 225, 275],
+        cooldown: [90, 75, 60],
+        castRange: [600, 700, 800],
+        effects: [{ type: 'damage', damageType: 'physical', value: [400, 600, 800] }],
+      },
+      ice_mage_freeze: {
+        name: 'Freeze',
+        manaCost: [100, 110, 120, 130],
+        cooldown: [10, 10, 10, 10],
+        castRange: [300, 350, 400, 450],
+        duration: [1.5, 2, 2.5, 3],
+        effects: [{ type: 'control', controlEffect: 'root' }],
+      },
+      ice_mage_ice_blast: {
+        name: 'Ice Blast',
+        manaCost: [90, 110, 130, 150],
+        cooldown: [8, 8, 8, 8],
+        castRange: [400, 400, 400, 400],
+        radius: [200, 225, 250, 275],
+        effects: [{ type: 'damage', damageType: 'magical', value: [100, 175, 250, 325] }],
+      },
+      ice_mage_blizzard: {
+        name: 'Blizzard',
+        manaCost: [250, 350, 450],
+        cooldown: [150, 130, 110],
+        castRange: [0, 0, 0],
+        radius: [800, 1000, 1200],
+        duration: [2, 3, 4],
+        effects: [
+          { type: 'control', controlEffect: 'stun' },
+          { type: 'damage', damageType: 'magical', value: [100, 200, 300] },
+        ],
+      },
+      assassin_dagger: {
+        name: 'Venomous Dagger',
+        manaCost: [50, 60, 70, 80],
+        cooldown: [6, 6, 6, 6],
+        castRange: [300, 350, 400, 450],
+        duration: [3, 3, 3, 3],
+        effects: [{ type: 'damage', damageType: 'physical', value: [50, 100, 150, 200] }],
+      },
+      assassin_backstab: {
+        name: 'Phantom Strike',
+        manaCost: [150, 200, 250],
+        cooldown: [80, 60, 40],
+        castRange: [700, 900, 1100],
+        effects: [{ type: 'damage', damageType: 'physical', value: [300, 450, 600] }],
+      },
+      tank_taunt: {
+        name: 'Berserker Call',
+        manaCost: [80, 90, 100, 110],
+        cooldown: [17, 15, 13, 11],
+        castRange: [0, 0, 0, 0],
+        radius: [275, 300, 325, 350],
+        duration: [2, 2.5, 3, 3.5],
+        effects: [{ type: 'control', controlEffect: 'stun' }],
+      },
+      tank_charge: {
+        name: 'Stampede',
+        manaCost: [100, 125, 150],
+        cooldown: [90, 75, 60],
+        castRange: [800, 1000, 1200],
+        effects: [
+          { type: 'control', controlEffect: 'stun' },
+          { type: 'damage', damageType: 'physical', value: [150, 250, 350] },
+        ],
+      },
+      support_hex: {
+        name: 'Hex',
+        manaCost: [110, 140, 170, 200],
+        cooldown: [23, 20, 17, 14],
+        castRange: [500, 550, 600, 650],
+        duration: [1.5, 2, 2.5, 3],
+        effects: [{ type: 'control', controlEffect: 'hex' }],
+      },
+      support_stun: {
+        name: 'Shackles',
+        manaCost: [100, 120, 140, 160],
+        cooldown: [18, 16, 14, 12],
+        castRange: [400, 400, 400, 400],
+        duration: [2, 3, 4, 5],
+        effects: [{ type: 'control', controlEffect: 'stun' }],
+      },
+      support_finger: {
+        name: 'Finger of Death',
+        manaCost: [200, 420, 650],
+        cooldown: [160, 100, 50],
+        castRange: [600, 725, 850],
+        effects: [{ type: 'damage', damageType: 'magical', value: [600, 725, 850] }],
+      },
+      swordsman_spin: {
+        name: 'Blade Fury',
+        manaCost: [110, 115, 120, 125],
+        cooldown: [30, 28, 26, 24],
+        castRange: [0, 0, 0, 0],
+        radius: [200, 200, 200, 200],
+        duration: [4, 5, 6, 7],
+        effects: [{ type: 'damage', damageType: 'magical', value: [80, 105, 130, 155] }],
+      },
+      swordsman_heal: {
+        name: 'Healing Ward',
+        manaCost: [120, 125, 130, 135],
+        cooldown: [60, 60, 60, 60],
+        castRange: [350, 350, 350, 350],
+        radius: [400, 400, 400, 400],
+        duration: [20, 20, 20, 20],
+        effects: [{ type: 'heal', value: [100, 200, 300, 400] }],
+      },
+      swordsman_omnislash: {
+        name: 'Omnislash',
+        manaCost: [200, 275, 350],
+        cooldown: [130, 120, 110],
+        castRange: [350, 350, 350],
+        effects: [{ type: 'damage', damageType: 'physical', value: [200, 225, 250] }],
+      },
+      thunderer_bolt: {
+        name: 'Thunder Bolt',
+        manaCost: [90, 105, 120, 135],
+        cooldown: [12, 11, 10, 9],
+        castRange: [450, 500, 550, 600],
+        effects: [
+          { type: 'damage', damageType: 'magical', value: [100, 175, 250, 325] },
+          { type: 'control', controlEffect: 'stun' },
+        ],
+      },
+      thunderer_chain: {
+        name: 'Chain Lightning',
+        manaCost: [90, 100, 110, 120],
+        cooldown: [9, 9, 9, 9],
+        castRange: [700, 700, 700, 700],
+        effects: [{ type: 'damage', damageType: 'magical', value: [85, 100, 115, 130] }],
+      },
+      thunderer_wrath: {
+        name: "Thundergod's Wrath",
+        manaCost: [225, 325, 450],
+        cooldown: [120, 110, 100],
+        castRange: [0, 0, 0],
+        radius: [9999, 9999, 9999],
+        effects: [{ type: 'damage', damageType: 'magical', value: [225, 325, 425] }],
+      },
+      shaman_fissure: {
+        name: 'Fissure',
+        manaCost: [100, 115, 130, 145],
+        cooldown: [18, 17, 16, 15],
+        castRange: [500, 600, 700, 800],
+        duration: [1, 1.25, 1.5, 1.75],
+        effects: [
+          { type: 'control', controlEffect: 'stun' },
+          { type: 'damage', damageType: 'magical', value: [110, 160, 210, 260] },
+        ],
+      },
+      shaman_totem: {
+        name: 'Enchant Totem',
+        manaCost: [20, 30, 40, 50],
+        cooldown: [5, 5, 5, 5],
+        castRange: [0, 0, 0, 0],
+        effects: [],
+      },
+      shaman_echo: {
+        name: 'Echo Slam',
+        manaCost: [145, 205, 265],
+        cooldown: [150, 130, 110],
+        castRange: [0, 0, 0],
+        radius: [575, 575, 575],
+        effects: [
+          { type: 'control', controlEffect: 'stun' },
+          { type: 'damage', damageType: 'magical', value: [160, 210, 270] },
+        ],
+      },
+      druid_treants: {
+        name: "Nature's Call",
+        manaCost: [130, 140, 150, 160],
+        cooldown: [37, 37, 37, 37],
+        castRange: [600, 600, 600, 600],
+        duration: [60, 60, 60, 60],
+        effects: [],
+      },
+      druid_teleport: {
+        name: 'Teleportation',
+        manaCost: [50, 50, 50, 50],
+        cooldown: [50, 40, 30, 20],
+        castRange: [99999, 99999, 99999, 99999],
+        effects: [],
+      },
+      druid_sprout: {
+        name: 'Sprout',
+        manaCost: [70, 90, 110, 130],
+        cooldown: [11, 11, 11, 11],
+        castRange: [550, 575, 600, 625],
+        duration: [3, 4, 5, 6],
+        effects: [{ type: 'control', controlEffect: 'root' }],
+      },
+      druid_wrath: {
+        name: 'Wrath of Nature',
+        manaCost: [175, 225, 275],
+        cooldown: [85, 75, 65],
+        castRange: [0, 0, 0],
+        radius: [9999, 9999, 9999],
+        effects: [{ type: 'damage', damageType: 'magical', value: [110, 140, 180] }],
+      },
+    };
+    return abilities[id];
   }
   
   useItem(heroId: string, itemSlot: number): void {
