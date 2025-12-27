@@ -2,10 +2,10 @@
 
 import React, { useCallback, useState, Suspense, useEffect, useRef, useMemo } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { GameHUD } from '@/components/game';
+import { GameHUD, Shop } from '@/components/game';
 import { GameEngine } from '@/game/engine';
-import { HeroEntity, GAME_CONSTANTS } from '@/types';
-import { getHeroDefinition, getAllHeroes } from '@/game/data';
+import { HeroEntity, GAME_CONSTANTS, ItemInstance } from '@/types';
+import { getHeroDefinition, getAllHeroes, getItemDefinition } from '@/game/data';
 import { generateId } from '@/utils';
 
 function createHero(heroId: string, team: 'radiant' | 'dire' = 'radiant'): HeroEntity | null {
@@ -84,6 +84,7 @@ function GameContent() {
   const [isEngineReady, setIsEngineReady] = useState(false);
   const [radiantScore, setRadiantScore] = useState(0);
   const [direScore, setDireScore] = useState(0);
+  const [isShopOpen, setIsShopOpen] = useState(false);
   
   // Initialize heroes once
   const initialHero = useMemo(() => createHero(heroId, 'radiant'), [heroId]);
@@ -151,8 +152,20 @@ function GameContent() {
       setDireScore(dScore);
     }, 100);
     
+    // Keyboard handler for shop toggle
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key.toLowerCase() === 'b') {
+        setIsShopOpen(prev => !prev);
+      }
+      if (e.key === 'Escape') {
+        setIsShopOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    
     return () => {
       clearInterval(updateInterval);
+      window.removeEventListener('keydown', handleKeyDown);
       newEngine.destroy();
     };
   }, [initialHero, initialEnemyHero]);
@@ -163,6 +176,35 @@ function GameContent() {
     }
   }, [heroState]);
   
+  const handleLevelUpAbility = useCallback((index: number) => {
+    if (!engineRef.current || !heroState) return;
+    if (heroState.abilityPoints <= 0) return;
+    
+    const hero = engineRef.current.getHero(heroState.id);
+    if (!hero) return;
+    
+    const ability = hero.abilities[index];
+    if (!ability) return;
+    
+    const isUltimate = index === 3;
+    const maxLevel = isUltimate ? 3 : 4;
+    
+    if (ability.level >= maxLevel) return;
+    
+    // Ultimate requires level 6, 12, 18
+    if (isUltimate) {
+      const requiredLevels = [6, 12, 18];
+      const nextAbilityLevel = ability.level + 1;
+      if (hero.level < requiredLevels[nextAbilityLevel - 1]) return;
+    }
+    
+    // Level up the ability
+    ability.level += 1;
+    hero.abilityPoints -= 1;
+    
+    setHeroState({ ...hero });
+  }, [heroState]);
+  
   const handleItemClick = useCallback((index: number) => {
     if (engineRef.current && heroState) {
       engineRef.current.useItem(heroState.id, index);
@@ -170,9 +212,128 @@ function GameContent() {
   }, [heroState]);
   
   const handleShopClick = useCallback(() => {
-    // TODO: Open shop UI
-    console.log('Shop clicked');
+    setIsShopOpen(true);
   }, []);
+  
+  const handleShopClose = useCallback(() => {
+    setIsShopOpen(false);
+  }, []);
+  
+  const handleBuyItem = useCallback((itemId: string) => {
+    if (!engineRef.current || !heroState) return;
+    
+    const itemDef = getItemDefinition(itemId);
+    if (!itemDef) return;
+    
+    // Check if can afford
+    if (heroState.gold < itemDef.cost) return;
+    
+    // Find empty slot
+    const emptySlot = heroState.inventory.findIndex(slot => slot === null);
+    if (emptySlot === -1) return;
+    
+    // Create item instance
+    const newItem: ItemInstance = {
+      definitionId: itemId,
+      charges: itemDef.charges,
+      currentCooldown: 0,
+    };
+    
+    // Update hero
+    const hero = engineRef.current.getHero(heroState.id);
+    if (hero) {
+      hero.gold -= itemDef.cost;
+      hero.inventory[emptySlot] = newItem;
+      
+      // Apply item stats immediately
+      if (itemDef.stats) {
+        if (itemDef.stats.maxHealth) hero.stats.maxHealth += itemDef.stats.maxHealth;
+        if (itemDef.stats.maxMana) hero.stats.maxMana += itemDef.stats.maxMana;
+        if (itemDef.stats.healthRegen) hero.stats.healthRegen += itemDef.stats.healthRegen;
+        if (itemDef.stats.manaRegen) hero.stats.manaRegen += itemDef.stats.manaRegen;
+        if (itemDef.stats.armor) hero.stats.armor += itemDef.stats.armor;
+        if (itemDef.stats.attackDamage) hero.stats.attackDamage += itemDef.stats.attackDamage;
+        if (itemDef.stats.attackSpeed) hero.stats.attackSpeed += itemDef.stats.attackSpeed;
+        if (itemDef.stats.movementSpeed) hero.stats.movementSpeed += itemDef.stats.movementSpeed;
+      }
+      
+      // Apply bonus attributes
+      if (itemDef.bonusAttributes) {
+        if (itemDef.bonusAttributes.strength) {
+          hero.attributes.strength += itemDef.bonusAttributes.strength;
+          hero.stats.maxHealth += itemDef.bonusAttributes.strength * GAME_CONSTANTS.STRENGTH_HP_BONUS;
+          hero.stats.healthRegen += itemDef.bonusAttributes.strength * GAME_CONSTANTS.STRENGTH_REGEN_BONUS;
+        }
+        if (itemDef.bonusAttributes.agility) {
+          hero.attributes.agility += itemDef.bonusAttributes.agility;
+          hero.stats.armor += itemDef.bonusAttributes.agility * GAME_CONSTANTS.AGILITY_ARMOR_BONUS;
+          hero.stats.attackSpeed += itemDef.bonusAttributes.agility * GAME_CONSTANTS.AGILITY_ATTACK_SPEED_BONUS / 100;
+        }
+        if (itemDef.bonusAttributes.intelligence) {
+          hero.attributes.intelligence += itemDef.bonusAttributes.intelligence;
+          hero.stats.maxMana += itemDef.bonusAttributes.intelligence * GAME_CONSTANTS.INTELLIGENCE_MANA_BONUS;
+          hero.stats.manaRegen += itemDef.bonusAttributes.intelligence * GAME_CONSTANTS.INTELLIGENCE_REGEN_BONUS;
+        }
+      }
+      
+      setHeroState({ ...hero });
+    }
+  }, [heroState]);
+  
+  const handleSellItem = useCallback((slotIndex: number) => {
+    if (!engineRef.current || !heroState) return;
+    
+    const item = heroState.inventory[slotIndex];
+    if (!item) return;
+    
+    const itemDef = getItemDefinition(item.definitionId);
+    if (!itemDef) return;
+    
+    const sellPrice = Math.floor(itemDef.cost * 0.5); // 50% sell value
+    
+    const hero = engineRef.current.getHero(heroState.id);
+    if (hero) {
+      hero.gold += sellPrice;
+      hero.inventory[slotIndex] = null;
+      
+      // Remove item stats
+      if (itemDef.stats) {
+        if (itemDef.stats.maxHealth) hero.stats.maxHealth -= itemDef.stats.maxHealth;
+        if (itemDef.stats.maxMana) hero.stats.maxMana -= itemDef.stats.maxMana;
+        if (itemDef.stats.healthRegen) hero.stats.healthRegen -= itemDef.stats.healthRegen;
+        if (itemDef.stats.manaRegen) hero.stats.manaRegen -= itemDef.stats.manaRegen;
+        if (itemDef.stats.armor) hero.stats.armor -= itemDef.stats.armor;
+        if (itemDef.stats.attackDamage) hero.stats.attackDamage -= itemDef.stats.attackDamage;
+        if (itemDef.stats.attackSpeed) hero.stats.attackSpeed -= itemDef.stats.attackSpeed;
+        if (itemDef.stats.movementSpeed) hero.stats.movementSpeed -= itemDef.stats.movementSpeed;
+      }
+      
+      // Remove bonus attributes
+      if (itemDef.bonusAttributes) {
+        if (itemDef.bonusAttributes.strength) {
+          hero.attributes.strength -= itemDef.bonusAttributes.strength;
+          hero.stats.maxHealth -= itemDef.bonusAttributes.strength * GAME_CONSTANTS.STRENGTH_HP_BONUS;
+          hero.stats.healthRegen -= itemDef.bonusAttributes.strength * GAME_CONSTANTS.STRENGTH_REGEN_BONUS;
+        }
+        if (itemDef.bonusAttributes.agility) {
+          hero.attributes.agility -= itemDef.bonusAttributes.agility;
+          hero.stats.armor -= itemDef.bonusAttributes.agility * GAME_CONSTANTS.AGILITY_ARMOR_BONUS;
+          hero.stats.attackSpeed -= itemDef.bonusAttributes.agility * GAME_CONSTANTS.AGILITY_ATTACK_SPEED_BONUS / 100;
+        }
+        if (itemDef.bonusAttributes.intelligence) {
+          hero.attributes.intelligence -= itemDef.bonusAttributes.intelligence;
+          hero.stats.maxMana -= itemDef.bonusAttributes.intelligence * GAME_CONSTANTS.INTELLIGENCE_MANA_BONUS;
+          hero.stats.manaRegen -= itemDef.bonusAttributes.intelligence * GAME_CONSTANTS.INTELLIGENCE_REGEN_BONUS;
+        }
+      }
+      
+      // Clamp health/mana to max
+      hero.stats.health = Math.min(hero.stats.health, hero.stats.maxHealth);
+      hero.stats.mana = Math.min(hero.stats.mana, hero.stats.maxMana);
+      
+      setHeroState({ ...hero });
+    }
+  }, [heroState]);
   
   // Use heroState for display, fallback to initial hero
   const displayHero = heroState || initialHero;
@@ -197,16 +358,26 @@ function GameContent() {
         </div>
       )}
       {displayHero && isEngineReady && (
-        <GameHUD
-          hero={displayHero}
-          gameTime={gameTime}
-          radiantScore={radiantScore}
-          direScore={direScore}
-          isNight={isNight}
-          onAbilityClick={handleAbilityClick}
-          onItemClick={handleItemClick}
-          onShopClick={handleShopClick}
-        />
+        <>
+          <GameHUD
+            hero={displayHero}
+            gameTime={gameTime}
+            radiantScore={radiantScore}
+            direScore={direScore}
+            isNight={isNight}
+            onAbilityClick={handleAbilityClick}
+            onLevelUpAbility={handleLevelUpAbility}
+            onItemClick={handleItemClick}
+            onShopClick={handleShopClick}
+          />
+          <Shop
+            hero={displayHero}
+            isOpen={isShopOpen}
+            onClose={handleShopClose}
+            onBuyItem={handleBuyItem}
+            onSellItem={handleSellItem}
+          />
+        </>
       )}
     </div>
   );

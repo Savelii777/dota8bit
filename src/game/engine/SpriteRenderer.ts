@@ -94,17 +94,75 @@ export class SpriteRenderer {
       ? { primary: COLORS.radiantPrimary, secondary: COLORS.radiantSecondary, accent: COLORS.radiantAccent, skin: COLORS.radiantSkin }
       : { primary: COLORS.direPrimary, secondary: COLORS.direSecondary, accent: COLORS.direAccent, skin: COLORS.direSkin };
     
-    const frame = Math.floor(this.animationTime * 4) % 4;
+    // Hero-specific color accents
+    const heroColors = this.getHeroColors(heroType);
+    
+    const frame = Math.floor(this.animationTime * 6) % 4;
     const bobOffset = (animState === 'walk' || animState === 'attack') ? Math.sin(frame * Math.PI / 2) * 2 : 0;
     
     const px = Math.floor(position.x);
     const py = Math.floor(position.y + bobOffset);
     const s = scale;
     
-    // Base hero sprite (16x16 scaled)
-    // Draw body
+    // Draw shadow
+    this.ctx.globalAlpha = 0.3;
+    this.ctx.fillStyle = COLORS.black;
+    this.ctx.beginPath();
+    this.ctx.ellipse(px, py + 4*s, 6*s, 3*s, 0, 0, Math.PI * 2);
+    this.ctx.fill();
+    this.ctx.globalAlpha = 1.0;
+    
+    // Draw based on hero type
+    this.drawHeroByType(px, py, s, heroType, colors, heroColors, direction, animState, frame, isAttacking);
+    
+    // Add team glow effect
+    this.ctx.globalAlpha = 0.25;
+    this.ctx.fillStyle = colors.primary;
+    this.ctx.beginPath();
+    this.ctx.arc(px, py - 4*s, 14*s, 0, Math.PI * 2);
+    this.ctx.fill();
+    this.ctx.globalAlpha = 1.0;
+  }
+  
+  // Get hero-specific colors
+  private getHeroColors(heroType: string): { weapon: string; accent: string; special: string } {
+    const heroColorMap: Record<string, { weapon: string; accent: string; special: string }> = {
+      warrior: { weapon: '#C0C0C0', accent: '#8B0000', special: '#FF4500' },
+      archer: { weapon: '#8B4513', accent: '#006400', special: '#00CED1' },
+      ice_mage: { weapon: '#00BFFF', accent: '#4169E1', special: '#E0FFFF' },
+      assassin: { weapon: '#2F4F4F', accent: '#800080', special: '#9400D3' },
+      tank: { weapon: '#C0C0C0', accent: '#4A4A4A', special: '#FFD700' },
+      support: { weapon: '#FFD700', accent: '#FF69B4', special: '#FFFFFF' },
+      swordsman: { weapon: '#C0C0C0', accent: '#228B22', special: '#7CFC00' },
+      thunderer: { weapon: '#FFD700', accent: '#00008B', special: '#00FFFF' },
+      earth_shaman: { weapon: '#8B4513', accent: '#CD853F', special: '#FF6347' },
+      druid: { weapon: '#228B22', accent: '#006400', special: '#90EE90' },
+    };
+    return heroColorMap[heroType] || { weapon: '#C0C0C0', accent: '#808080', special: '#FFFFFF' };
+  }
+  
+  // Draw hero sprite based on type
+  private drawHeroByType(
+    px: number,
+    py: number,
+    s: number,
+    heroType: string,
+    colors: { primary: string; secondary: string; accent: string; skin: string },
+    heroColors: { weapon: string; accent: string; special: string },
+    direction: Direction,
+    animState: AnimationState,
+    frame: number,
+    isAttacking: boolean
+  ): void {
+    const legFrame = frame % 2;
+    
+    // Draw body base
     this.ctx.fillStyle = colors.primary;
     this.ctx.fillRect(px - 4*s, py - 6*s, 8*s, 8*s);
+    
+    // Body detail/armor
+    this.ctx.fillStyle = heroColors.accent;
+    this.ctx.fillRect(px - 3*s, py - 5*s, 6*s, 2*s);
     
     // Draw body outline
     this.ctx.fillStyle = colors.secondary;
@@ -125,14 +183,12 @@ export class SpriteRenderer {
       this.ctx.fillRect(px - 3*s, py - 9*s, 1*s, 1*s);
     }
     
-    // Draw helmet/hair based on hero type
-    this.ctx.fillStyle = colors.accent;
-    this.ctx.fillRect(px - 4*s, py - 12*s, 8*s, 2*s);
+    // Hero-specific headgear
+    this.drawHeroHeadgear(px, py, s, heroType, heroColors, colors);
     
     // Draw legs with animation
     this.ctx.fillStyle = colors.secondary;
     if (animState === 'walk') {
-      const legFrame = frame % 2;
       if (legFrame === 0) {
         this.ctx.fillRect(px - 3*s, py + 2*s, 2*s, 4*s);
         this.ctx.fillRect(px + 1*s, py + 2*s, 2*s, 4*s);
@@ -145,27 +201,201 @@ export class SpriteRenderer {
       this.ctx.fillRect(px + 1*s, py + 2*s, 2*s, 4*s);
     }
     
-    // Draw weapon for melee heroes
-    if (isAttacking || animState === 'attack') {
-      this.ctx.fillStyle = '#C0C0C0';
-      if (direction === 'right') {
-        this.ctx.fillRect(px + 5*s, py - 8*s, 8*s, 2*s);
-      } else if (direction === 'left') {
-        this.ctx.fillRect(px - 13*s, py - 8*s, 8*s, 2*s);
-      } else if (direction === 'up') {
-        this.ctx.fillRect(px + 3*s, py - 14*s, 2*s, 8*s);
+    // Draw weapon
+    this.drawHeroWeapon(px, py, s, heroType, heroColors, direction, isAttacking, animState, frame);
+  }
+  
+  // Draw hero-specific headgear
+  private drawHeroHeadgear(
+    px: number,
+    py: number,
+    s: number,
+    heroType: string,
+    heroColors: { weapon: string; accent: string; special: string },
+    colors: { primary: string; secondary: string; accent: string; skin: string }
+  ): void {
+    switch (heroType) {
+      case 'warrior':
+        // Viking helmet with horns
+        this.ctx.fillStyle = '#C0C0C0';
+        this.ctx.fillRect(px - 4*s, py - 12*s, 8*s, 2*s);
+        this.ctx.fillStyle = heroColors.accent;
+        this.ctx.fillRect(px - 5*s, py - 14*s, 2*s, 4*s);
+        this.ctx.fillRect(px + 3*s, py - 14*s, 2*s, 4*s);
+        break;
+        
+      case 'archer':
+        // Hood
+        this.ctx.fillStyle = heroColors.accent;
+        this.ctx.fillRect(px - 4*s, py - 13*s, 8*s, 4*s);
+        this.ctx.fillStyle = colors.skin;
+        this.ctx.fillRect(px - 2*s, py - 10*s, 4*s, 2*s);
+        break;
+        
+      case 'ice_mage':
+        // Wizard hat
+        this.ctx.fillStyle = heroColors.accent;
+        this.ctx.fillRect(px - 4*s, py - 12*s, 8*s, 2*s);
+        this.ctx.beginPath();
+        this.ctx.moveTo(px, py - 18*s);
+        this.ctx.lineTo(px - 3*s, py - 12*s);
+        this.ctx.lineTo(px + 3*s, py - 12*s);
+        this.ctx.fill();
+        // Ice crystal on top
+        this.ctx.fillStyle = heroColors.special;
+        this.ctx.fillRect(px - 1*s, py - 16*s, 2*s, 2*s);
+        break;
+        
+      case 'assassin':
+        // Face mask
+        this.ctx.fillStyle = heroColors.accent;
+        this.ctx.fillRect(px - 4*s, py - 12*s, 8*s, 2*s);
+        this.ctx.fillRect(px - 3*s, py - 8*s, 6*s, 2*s);
+        break;
+        
+      case 'tank':
+        // Heavy helmet
+        this.ctx.fillStyle = '#C0C0C0';
+        this.ctx.fillRect(px - 4*s, py - 13*s, 8*s, 4*s);
+        this.ctx.fillStyle = heroColors.special;
+        this.ctx.fillRect(px - 1*s, py - 11*s, 2*s, 2*s);
+        break;
+        
+      case 'support':
+        // Tiara/crown
+        this.ctx.fillStyle = heroColors.special;
+        this.ctx.fillRect(px - 3*s, py - 12*s, 6*s, 2*s);
+        this.ctx.fillRect(px - 1*s, py - 14*s, 2*s, 2*s);
+        this.ctx.fillStyle = heroColors.accent;
+        this.ctx.fillRect(px - 4*s, py - 12*s, 2*s, 2*s);
+        this.ctx.fillRect(px + 2*s, py - 12*s, 2*s, 2*s);
+        break;
+        
+      case 'swordsman':
+        // Samurai-style headband
+        this.ctx.fillStyle = heroColors.accent;
+        this.ctx.fillRect(px - 4*s, py - 11*s, 8*s, 2*s);
+        this.ctx.fillStyle = heroColors.special;
+        this.ctx.fillRect(px + 3*s, py - 13*s, 3*s, 4*s);
+        break;
+        
+      case 'thunderer':
+        // Lightning crown
+        this.ctx.fillStyle = heroColors.accent;
+        this.ctx.fillRect(px - 4*s, py - 12*s, 8*s, 2*s);
+        this.ctx.fillStyle = heroColors.special;
+        this.ctx.beginPath();
+        this.ctx.moveTo(px - 2*s, py - 12*s);
+        this.ctx.lineTo(px, py - 16*s);
+        this.ctx.lineTo(px + 2*s, py - 12*s);
+        this.ctx.fill();
+        break;
+        
+      case 'earth_shaman':
+        // Totem-style headdress
+        this.ctx.fillStyle = heroColors.accent;
+        this.ctx.fillRect(px - 5*s, py - 14*s, 10*s, 4*s);
+        this.ctx.fillStyle = heroColors.special;
+        this.ctx.fillRect(px - 1*s, py - 13*s, 2*s, 2*s);
+        break;
+        
+      case 'druid':
+        // Antlers/nature crown
+        this.ctx.fillStyle = heroColors.accent;
+        this.ctx.fillRect(px - 4*s, py - 12*s, 8*s, 2*s);
+        this.ctx.fillStyle = heroColors.weapon;
+        this.ctx.fillRect(px - 5*s, py - 16*s, 2*s, 6*s);
+        this.ctx.fillRect(px + 3*s, py - 16*s, 2*s, 6*s);
+        break;
+        
+      default:
+        // Default helmet
+        this.ctx.fillStyle = colors.accent;
+        this.ctx.fillRect(px - 4*s, py - 12*s, 8*s, 2*s);
+    }
+  }
+  
+  // Draw hero weapon
+  private drawHeroWeapon(
+    px: number,
+    py: number,
+    s: number,
+    heroType: string,
+    heroColors: { weapon: string; accent: string; special: string },
+    direction: Direction,
+    isAttacking: boolean,
+    animState: AnimationState,
+    frame: number
+  ): void {
+    const attackOffset = isAttacking ? Math.sin(frame * Math.PI) * 4 : 0;
+    const isRanged = ['archer', 'ice_mage', 'support', 'thunderer', 'druid'].includes(heroType);
+    
+    this.ctx.fillStyle = heroColors.weapon;
+    
+    if (isRanged) {
+      // Ranged weapons (staff/bow)
+      if (heroType === 'archer') {
+        // Bow
+        this.ctx.strokeStyle = heroColors.weapon;
+        this.ctx.lineWidth = 2*s;
+        this.ctx.beginPath();
+        if (direction === 'right') {
+          this.ctx.arc(px + 5*s, py - 2*s, 6*s, -Math.PI/2, Math.PI/2);
+        } else {
+          this.ctx.arc(px - 5*s, py - 2*s, 6*s, Math.PI/2, -Math.PI/2);
+        }
+        this.ctx.stroke();
       } else {
-        this.ctx.fillRect(px + 3*s, py + 2*s, 2*s, 8*s);
+        // Staff
+        if (direction === 'right') {
+          this.ctx.fillRect(px + 4*s, py - 12*s, 2*s, 14*s);
+        } else {
+          this.ctx.fillRect(px - 6*s, py - 12*s, 2*s, 14*s);
+        }
+        // Staff orb
+        this.ctx.fillStyle = heroColors.special;
+        this.ctx.beginPath();
+        this.ctx.arc(direction === 'right' ? px + 5*s : px - 5*s, py - 14*s, 3*s, 0, Math.PI * 2);
+        this.ctx.fill();
+        
+        // Staff glow
+        this.ctx.globalAlpha = 0.5 + Math.sin(this.animationTime * 4) * 0.3;
+        this.ctx.fillStyle = heroColors.special;
+        this.ctx.beginPath();
+        this.ctx.arc(direction === 'right' ? px + 5*s : px - 5*s, py - 14*s, 5*s, 0, Math.PI * 2);
+        this.ctx.fill();
+        this.ctx.globalAlpha = 1.0;
+      }
+    } else {
+      // Melee weapons
+      if (isAttacking || animState === 'attack') {
+        if (direction === 'right') {
+          this.ctx.fillRect(px + 5*s + attackOffset, py - 8*s, 10*s, 3*s);
+          // Weapon handle
+          this.ctx.fillStyle = '#8B4513';
+          this.ctx.fillRect(px + 4*s, py - 7*s, 3*s, 2*s);
+        } else if (direction === 'left') {
+          this.ctx.fillRect(px - 15*s - attackOffset, py - 8*s, 10*s, 3*s);
+          this.ctx.fillStyle = '#8B4513';
+          this.ctx.fillRect(px - 7*s, py - 7*s, 3*s, 2*s);
+        } else if (direction === 'up') {
+          this.ctx.fillRect(px + 2*s, py - 18*s - attackOffset, 3*s, 10*s);
+          this.ctx.fillStyle = '#8B4513';
+          this.ctx.fillRect(px + 2*s, py - 8*s, 3*s, 3*s);
+        } else {
+          this.ctx.fillRect(px + 2*s, py + 4*s + attackOffset, 3*s, 10*s);
+          this.ctx.fillStyle = '#8B4513';
+          this.ctx.fillRect(px + 2*s, py + 2*s, 3*s, 3*s);
+        }
+      } else {
+        // Weapon at rest (on back or side)
+        if (direction === 'right' || direction === 'down') {
+          this.ctx.fillRect(px + 3*s, py - 10*s, 2*s, 8*s);
+        } else {
+          this.ctx.fillRect(px - 5*s, py - 10*s, 2*s, 8*s);
+        }
       }
     }
-    
-    // Add team glow effect
-    this.ctx.globalAlpha = 0.3;
-    this.ctx.fillStyle = colors.primary;
-    this.ctx.beginPath();
-    this.ctx.arc(px, py - 4*s, 12*s, 0, Math.PI * 2);
-    this.ctx.fill();
-    this.ctx.globalAlpha = 1.0;
   }
   
   // Draw a creep (smaller than hero)

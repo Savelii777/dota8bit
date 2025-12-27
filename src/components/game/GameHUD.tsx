@@ -16,6 +16,7 @@ interface GameHUDProps {
   direScore: number;
   isNight?: boolean;
   onAbilityClick?: (index: number) => void;
+  onLevelUpAbility?: (index: number) => void;
   onItemClick?: (index: number) => void;
   onShopClick?: () => void;
 }
@@ -27,6 +28,7 @@ export function GameHUD({
   direScore,
   isNight = false,
   onAbilityClick,
+  onLevelUpAbility,
   onItemClick,
   onShopClick,
 }: GameHUDProps) {
@@ -118,7 +120,7 @@ export function GameHUD({
           
           {/* Abilities */}
           <div className="ml-4">
-            <AbilityPanel hero={hero} onAbilityClick={onAbilityClick} />
+            <AbilityPanel hero={hero} onAbilityClick={onAbilityClick} onLevelUpAbility={onLevelUpAbility} />
           </div>
           
           {/* Inventory */}
